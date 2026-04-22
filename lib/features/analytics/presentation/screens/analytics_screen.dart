@@ -206,7 +206,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
         try {
           response = await model.generateContent([Content.text(prompt)]);
         } catch (e) {
-          print('Gemini 2.5 Flash failed: \${e.toString()}');
+          print('Gemini 2.5 Flash failed: ${e.toString()}');
           try {
             print('Falling back to gemini-2.5-pro...');
             model = GenerativeModel(model: 'gemini-2.5-pro', apiKey: apiKey);
