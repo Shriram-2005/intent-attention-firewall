@@ -59,6 +59,16 @@ Intent acts as a real-time cognitive firewall at the OS level. Every incoming no
 
 ---
 
+### 🔒 Privacy Guarantee: AI Cognitive Coach
+
+The **AI Insight Generation (PDF Report)** inside the Analytics tab is **100% Opt-In**. 
+
+* **If you opt out:** Nothing changes. Intent functions entirely on-device with zero cloud connections.
+* **If you opt in:** Only anonymized metadata (your total mathematical counts for *Urgent*, *Buffer*, and *Spam* volumes) and the requested timeframe are sent to the AI.
+* **The Absolute Rule:** No raw notification text, no sender details, and no private data are *ever* requested, accessed, or transmitted to the cloud. 
+
+---
+
 ## Architecture
 
 <div align="center">
