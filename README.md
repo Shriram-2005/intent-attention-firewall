@@ -41,7 +41,7 @@ Intent acts as a real-time cognitive firewall at the OS level. Every incoming no
 <div align="center">
   <img src="assets/docs/Process%20Diagram%20Intent%20Pipeline.png" width="100%" alt="Intent Pipeline">
   <br><br>
-  <img src="assets/docs/Process%20Diagram%20How%20it%20Works.png" width="100%" alt="How Intent Works">
+  <img src="assets/docs/Process%20Diagram%20How%20it%20Works.png" width="70%" alt="How Intent Works">
 </div>
 
 ---
