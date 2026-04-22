@@ -206,13 +206,21 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
         try {
           response = await model.generateContent([Content.text(prompt)]);
         } catch (e) {
-          final errStr = e.toString().toLowerCase();
-          if (errStr.contains('503') || errStr.contains('unavailable') || errStr.contains('high demand') || errStr.contains('server error') || errStr.contains('429') || errStr.contains('quota') || errStr.contains('exhausted')) {
-            print('Gemini 2.5 Flash unavailable/quota exceeded. Falling back to gemini-2.5-pro...');
+          print('Gemini 2.5 Flash failed: \${e.toString()}');
+          try {
+            print('Falling back to gemini-2.5-pro...');
             model = GenerativeModel(model: 'gemini-2.5-pro', apiKey: apiKey);
             response = await model.generateContent([Content.text(prompt)]);
-          } else {
-            rethrow;
+          } catch (e2) {
+            try {
+              print('Falling back to gemini-1.5-pro...');
+              model = GenerativeModel(model: 'gemini-1.5-pro', apiKey: apiKey);
+              response = await model.generateContent([Content.text(prompt)]);
+            } catch (e3) {
+              print('Falling back to absolute default gemini-pro...');
+              model = GenerativeModel(model: 'gemini-pro', apiKey: apiKey);
+              response = await model.generateContent([Content.text(prompt)]);
+            }
           }
         }
         
