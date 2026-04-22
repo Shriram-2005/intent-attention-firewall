@@ -201,21 +201,28 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
             'IMPORTANT: Maintain strict privacy. Rely exclusively on these timestamps and categories rather than assuming content. Keep it simple, readable, and formatting-friendly. Absolutely no emojis, robotic greetings, or all-caps paragraphs.';
         
         GenerativeModel model = GenerativeModel(model: 'gemini-2.5-flash', apiKey: apiKey);
-        GenerateContentResponse response;
-        try {
-          response = await model.generateContent([Content.text(prompt)]);
-        } catch (e) {
-          final errStr = e.toString().toLowerCase();
-          if (errStr.contains('503') || errStr.contains('unavailable') || errStr.contains('high demand') || errStr.contains('server error')) {
-            print('Gemini 2.5 Flash is under high demand (503). Falling back to gemini-1.5-flash...');
-            model = GenerativeModel(model: 'gemini-1.5-flash', apiKey: apiKey);
+        GenerateContentResponse? response;
+        
+        int maxRetries = 3;
+        int currentTry = 0;
+        
+        while (true) {
+          try {
             response = await model.generateContent([Content.text(prompt)]);
-          } else {
-            rethrow;
+            break; // Success
+          } catch (e) {
+            currentTry++;
+            final errStr = e.toString().toLowerCase();
+            if ((errStr.contains('503') || errStr.contains('unavailable') || errStr.contains('high demand') || errStr.contains('server error')) && currentTry < maxRetries) {
+              print('Gemini 2.5 Flash 503 Error. Retrying $currentTry/$maxRetries in 2 seconds...');
+              await Future.delayed(const Duration(seconds: 2));
+            } else {
+              rethrow;
+            }
           }
         }
         
-        final aiAnalysis = response.text ?? 'No insights generated.';
+        final aiAnalysis = response?.text ?? 'No insights generated.';
 
       List<pw.Widget> buildAiInsights(String text) {
         final List<pw.Widget> widgets = [];
