@@ -175,9 +175,7 @@ Intent requires the following Android permissions:
 
 | Link | Description |
 |---|---|
-| [Google Play Store](#) | Install directly from Play Store |
-| [Latest APK Release](https://drive.google.com/drive/folders/1Sbh6gw1D68Ui69mA2UokwbXutI4-glfS) | Download APK for sideloading |
-| [Demo Video](#) | 3-minute walkthrough |
+| [Latest APK Release](https://bit.ly/intent-apk) | Download APK for sideloading |
 
 ---
 
