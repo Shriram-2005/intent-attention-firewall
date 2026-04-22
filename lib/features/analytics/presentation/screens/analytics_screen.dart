@@ -200,26 +200,19 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
             'A simple markdown bulleted list of 2 short focus strategies referencing their peak traffic hours.\n\n'
             'IMPORTANT: Maintain strict privacy. Rely exclusively on these timestamps and categories rather than assuming content. Keep it simple, readable, and formatting-friendly. Absolutely no emojis, robotic greetings, or all-caps paragraphs.';
         
-        // Using gemini-pro as it has much higher availability and rate limits than experimental 2.5
-        GenerativeModel model = GenerativeModel(model: 'gemini-pro', apiKey: apiKey);
+        GenerativeModel model = GenerativeModel(model: 'gemini-2.5-flash', apiKey: apiKey);
         GenerateContentResponse? response;
         
-        int maxRetries = 3;
-        int currentTry = 0;
-        
-        while (true) {
-          try {
+        try {
+          response = await model.generateContent([Content.text(prompt)]);
+        } catch (e) {
+          final errStr = e.toString().toLowerCase();
+          if (errStr.contains('503') || errStr.contains('unavailable') || errStr.contains('high demand') || errStr.contains('server error') || errStr.contains('429') || errStr.contains('quota') || errStr.contains('exhausted')) {
+            print('Gemini 2.5 Flash unavailable/quota exceeded. Falling back to gemini-2.5-pro...');
+            model = GenerativeModel(model: 'gemini-2.5-pro', apiKey: apiKey);
             response = await model.generateContent([Content.text(prompt)]);
-            break; // Success
-          } catch (e) {
-            currentTry++;
-            final errStr = e.toString().toLowerCase();
-            if ((errStr.contains('503') || errStr.contains('unavailable') || errStr.contains('high demand') || errStr.contains('server error')) && currentTry < maxRetries) {
-              print('Gemini API 503 Error. Retrying $currentTry/$maxRetries in 2 seconds...');
-              await Future.delayed(const Duration(seconds: 2));
-            } else {
-              rethrow;
-            }
+          } else {
+            rethrow;
           }
         }
         
