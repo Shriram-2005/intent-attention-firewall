@@ -37,29 +37,22 @@ public class EndOfDayWorker extends Worker {
         Calendar cal = Calendar.getInstance();
         cal.set(Calendar.HOUR_OF_DAY, 0);
         cal.set(Calendar.MINUTE, 0);
+
         cal.set(Calendar.SECOND, 0);
         cal.set(Calendar.MILLISECOND, 0);
         
         long startTime = cal.getTimeInMillis();
         long endTime = System.currentTimeMillis();
 
+        int urgentCount = dao.getCountByCategoryBetween(0, startTime, endTime);
+        int bufferCount = dao.getCountByCategoryBetween(1, startTime, endTime);
+        int spamCount = dao.getCountByCategoryBetween(2, startTime, endTime);
+
         List<NotificationEntity> intercepted = dao.getInterceptedBetween(startTime, endTime);
         double cognitiveMins = 0.0;
         long lastBurstTimestamp = 0;
 
-                int urgentCount = 0;
-        int bufferCount = 0;
-        int spamCount = 0;
-
         for (NotificationEntity n : intercepted) {
-            if (n.category == 0) {
-                urgentCount++;
-            } else if (n.category == 1) {
-                bufferCount++;
-            } else {
-                spamCount++;
-            }
-
             if (lastBurstTimestamp == 0 || (n.timestamp - lastBurstTimestamp) > 120000) {
                 // New burst
                 cognitiveMins += (1.5 * n.contextMultiplier);
