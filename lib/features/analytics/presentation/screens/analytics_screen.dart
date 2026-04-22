@@ -10,6 +10,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/services/database_service.dart';
 import '../../../../core/state/engine_state.dart';
@@ -177,8 +178,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
           return '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}($cat)';
         }).join(', ');
 
-        const apiKey =
-            ''; // Replace with your api key if you want to test the AI generation. The app will work fully without it, just without the AI insights feature.
+        final apiKey = dotenv.env['GEMINI_API_KEY'] ?? ''; 
+        if (apiKey.isEmpty) {
+          throw Exception('API Key is missing or empty! Please check your .env file and fully restart the app (Stop and start again).');
+        }
         final model = GenerativeModel(model: 'gemini-2.5-flash', apiKey: apiKey);
         final dateStrStart = start.toLocal().toString().split(' ')[0];
         final dateStrEnd = end.toLocal().toString().split(' ')[0];
@@ -454,9 +457,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
         ),
       );
 
-      final output = await getTemporaryDirectory();
+      final output = await getApplicationDocumentsDirectory();
       final dateStr = start.toIso8601String().split('T')[0];
-      final file = File('${output.path}/Intent_Cognitive_Report_$dateStr.pdf');
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final file = File('${output.path}/Intent_Cognitive_Report_${dateStr}_$timestamp.pdf');
       await file.writeAsBytes(await pdf.save());
 
       if (mounted) {
@@ -471,12 +475,26 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
       if (mounted && dialogContext != null) {
         Navigator.pop(dialogContext!);
 
-        String errorMessage = 'A network error occurred. Please try again.';
-        if (e.toString().contains('429') ||
-            e.toString().toLowerCase().contains('quota') ||
-            e.toString().toLowerCase().contains('exhausted')) {
-          errorMessage =
-              'Our AI Coach is experiencing high traffic in your region. Please try again in a few moments.';
+        print("AI Report Error: $e");
+        final errString = e.toString().toLowerCase();
+        String errorMessage = 'An error occurred generating insights.';
+        
+        if (errString.contains('socket') || 
+            errString.contains('network') || 
+            errString.contains('clientexception') || 
+            errString.contains('failed host lookup')) {
+          errorMessage = 'A network connection error occurred. Please try again.';
+        } else if (errString.contains('503') ||
+                   errString.contains('unavailable') ||
+                   errString.contains('high demand') ||
+                   errString.contains('server error')) {
+          errorMessage = 'The Gemini 2.5 Flash model is currently experiencing exceptionally high demand. Please wait a moment and try again.';
+        } else if (errString.contains('429') ||
+                   errString.contains('quota') ||
+                   errString.contains('exhausted')) {
+          errorMessage = 'Our AI Coach is currently hitting API rate limits. Please try again later.';
+        } else {
+          errorMessage = 'AI Error: ${e.toString().length > 90 ? e.toString().substring(0, 90) + '...' : e.toString()}';
         }
 
         ScaffoldMessenger.of(context).showSnackBar(

@@ -6,9 +6,11 @@ import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'core/state/engine_state.dart';
 import 'core/services/local_notification_service.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await dotenv.load(fileName: ".env");
 
   // Force portrait orientation for Android
   await SystemChrome.setPreferredOrientations([

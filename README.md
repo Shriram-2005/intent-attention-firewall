@@ -1,16 +1,232 @@
-# intent_app
+<div align="center">
+  <h1>Intent — Attention Firewall</h1>
+  <p><em>Your phone intercepts you 80+ times a day. Intent intercepts it first.</em></p>
+</div>
 
-A new Flutter project.
+**Intent** is a privacy-first, on-device AI notification firewall for Android. Built for the Google Solution Challenge 2026, Intent uses a hybrid LSTM + heuristics engine running entirely offline to triage every notification in real-time — protecting your focus without ever sending your data to the cloud.
+
+<div align="center">
+  <img src="assets/docs/Dashboard.png" width="32%" />
+  <img src="assets/docs/Engine.png" width="32%" />
+  <img src="assets/docs/Analytics.png" width="32%" />
+</div>
+<br>
+<div align="center">
+  <img src="assets/docs/Urgent%20Audit%20Log.png" width="32%" />
+  <img src="assets/docs/Generated%20Summary%20Image.png" width="32%" />
+  <img src="assets/docs/Battery%20Report.png" width="32%" />
+</div>
+<br>
+
+<div align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License: MIT"></a>
+  <a href="https://android.com"><img src="https://img.shields.io/badge/Platform-Android-brightgreen.svg" alt="Platform"></a>
+  <a href="https://flutter.dev"><img src="https://img.shields.io/badge/Built%20With-Flutter%20%2B%20Kotlin-blue.svg" alt="Built With"></a>
+  <a href="https://www.tensorflow.org/lite"><img src="https://img.shields.io/badge/ML-TensorFlow%20Lite-orange.svg" alt="ML"></a>
+  <a href="https://sdgs.un.org"><img src="https://img.shields.io/badge/SDG-3%20%26%208-purple.svg" alt="SDG"></a>
+</div>
+
+---
+
+## The Problem
+
+Modern smartphones deliver notifications asynchronously with zero awareness of your cognitive state. Existing solutions force a binary choice — block everything or block nothing. Do Not Disturb modes create anxiety about missing genuine emergencies. No solution today understands the *context* of individual messages in real-time, on-device, without compromising privacy.
+
+---
+
+## The Solution
+
+Intent acts as a real-time cognitive firewall at the OS level. Every incoming notification passes through a three-stage decision pipeline before it ever reaches you:
+
+<div align="center">
+  <img src="assets/docs/Process%20Diagram%20Intent%20Pipeline.png" width="100%" alt="Intent Pipeline">
+  <br><br>
+  <img src="assets/docs/Process%20Diagram%20How%20it%20Works.png" width="100%" alt="How Intent Works">
+</div>
+
+---
+
+## Key Features
+
+| Feature | Description |
+|---|---|
+| **Hybrid AI Engine** | On-device LSTM (TFLite) + O(1) heuristic fast-path classifies every notification in milliseconds, fully offline |
+| **VIP Contact Bypass** | Named contacts always bypass AI and reach you instantly — Mom's emergency always gets through |
+| **GPS Driving Lockdown** | Detects speed >20 km/h via GPS sensor and auto-locks all non-VIP notifications — safety without isolation |
+| **Adaptive Learning** | Implicit Time-to-Dismiss (TTD) feedback silently personalizes filtering over time via Context-aware EMA |
+| **OLED Dashboard** | Tracks Focus Time Saved, interruption volume, and top distracting apps — all stored locally |
+| **AI Cognitive Coach** | Optional: sends only anonymized aggregate stats to Gemini Flash to generate a PDF wellness report |
+
+---
+
+## Architecture
+
+<div align="center">
+  <img src="assets/docs/Architecture.png" width="100%" alt="System Architecture">
+</div>
+
+---
+
+## Technology Stack
+
+| Layer | Technology |
+|---|---|
+| **Frontend** | Flutter / Dart, fl_chart, pdf package |
+| **Android Native** | Kotlin / Java, Android SDK, NotificationListenerService |
+| **Local Storage** | Android Room Database (SQLite) |
+| **On-Device ML** | TensorFlow Lite — LSTM sequence model for NLP |
+| **State Management** | Riverpod |
+| **Cloud AI (Optional)** | Google Gemini 2.5 Flash API |
+
+---
+
+## Performance Metrics
+
+All metrics measured from live on-device testing:
+
+| Metric | Value |
+|---|---|
+| TFLite inference latency | 145ms |
+| Battery consumption ratio | 0.79% |
+| Background battery drain | < 1 mAh |
+| Non-essential interruptions reduced | ~69% (84/122 notifications buffered or blocked) |
+| Focus time protected (sample session) | 91.5 minutes |
+
+---
+
+## SDG Alignment
+
+| Goal | How Intent Contributes |
+|---|---|
+| **SDG 3 — Good Health & Well-being** | Reduces digital anxiety, cognitive fatigue, and stress caused by notification overload |
+| **SDG 8 — Decent Work & Economic Growth** | Protects deep work time, enhances productivity, and promotes sustainable digital work habits |
+
+---
+
+## Project Structure
+
+```text
+intent-attention-firewall/
+├── android/
+│   └── app/src/main/
+│       ├── java/com/intentlabs/intent/
+│       │   ├── IntentBrain.java          ← Core ML + heuristics engine
+│       │   ├── NotificationService.kt    ← OS-level interceptor
+│       │   └── RoomDatabase.kt          ← Local storage
+│       └── assets/
+│           └── intent_model.tflite      ← Trained LSTM model
+├── lib/
+│   ├── main.dart
+│   ├── screens/
+│   │   ├── dashboard.dart               ← Home screen
+│   │   ├── insights.dart                ← Analytics & Focus Time
+│   │   ├── audit_log.dart               ← Notification history
+│   │   └── preferences.dart             ← Settings & VIP contacts
+│   ├── services/
+│   │   └── billing_service.dart         ← Google Play Billing
+│   └── providers/                       ← Riverpod state
+├── assets/
+└── README.md
+```
+
+---
 
 ## Getting Started
 
-This project is a starting point for a Flutter application.
+### Prerequisites
 
-A few resources to get you started if this is your first Flutter project:
+- Flutter SDK 3.0+
+- Android Studio / VS Code
+- Android device or emulator running Android 8.0+ (API 26+)
+- Java 11+
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+### Installation
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+```bash
+# Clone the repository
+git clone https://github.com/Shriram-2005/intent-attention-firewall.git
+
+# Navigate to project
+cd intent-attention-firewall
+
+# Install dependencies
+flutter pub get
+
+# Run the app
+flutter run
+```
+
+### Required Permissions
+
+Intent requires the following Android permissions:
+
+| Permission | Reason |
+|---|---|
+| `BIND_NOTIFICATION_LISTENER_SERVICE` | Core feature — intercept notifications at OS level |
+| `ACCESS_FINE_LOCATION` | GPS velocity detection for driving mode |
+| `FOREGROUND_SERVICE` | Keep the engine running in background |
+| `READ_CONTACTS` | VIP contact matching |
+
+> **Privacy note:** All permissions are used exclusively on-device. No data is transmitted to any server without explicit user consent.
+
+---
+
+## Download
+
+| Link | Description |
+|---|---|
+| [Google Play Store](#) | Install directly from Play Store |
+| [Latest APK Release](https://drive.google.com/drive/folders/1Sbh6gw1D68Ui69mA2UokwbXutI4-glfS) | Download APK for sideloading |
+| [Demo Video](#) | 3-minute walkthrough |
+
+---
+
+## Roadmap
+
+| Phase | Feature |
+|---|---|
+| **v1.1** | Focus streak, end-of-day notification, achievement badges |
+| **Phase 2** | Cross-app social trust graph, Wear OS biometric integration |
+| **Phase 3** | Migrate LSTM → quantized MobileBERT / DistilBERT via TFLite |
+| **Phase 4** | i18n — Tamil, Hindi, Arabic language support |
+
+---
+
+## About the Name
+
+The name **Intent** has two origins that perfectly converge.
+
+In Android development, an `Intent` is the core OS mechanism for inter-app communication — the very channel that notifications travel through. Intent intercepts Intents.
+
+In human terms, Intent means *deliberate, purposeful action* — using your phone with intention rather than being passively interrupted by it.
+
+The name was born in a 5th semester Mobile Application Development course, when the concept of explicit and implicit Intents sparked the idea that the notification pipeline itself could be intercepted and made intelligent.
+
+---
+
+## Built By
+
+**Shri Ram A U**
+Solo developer — Intent Labs
+Google Solution Challenge 2026
+
+---
+
+## License
+
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+
+---
+
+## Acknowledgements
+
+- Google Solution Challenge 2026
+- TensorFlow Lite team for on-device ML tooling
+- Flutter and Android open source communities
+- Every person who loses focus to their phone — this was built for you
+
+---
+
+<div align="center">
+  <em>Built with intention. Protecting yours.</em>
+</div>
