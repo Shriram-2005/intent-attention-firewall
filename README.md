@@ -120,23 +120,28 @@ Because Intent was built on live telemetry rather than emulation, it achieves re
 intent-attention-firewall/
 ├── android/
 │   └── app/src/main/
-│       ├── java/com/intentlabs/intent/
+│       ├── java/com/intent/intent_app/
 │       │   ├── IntentBrain.java          ← Core ML + heuristics engine
-│       │   ├── NotificationService.kt    ← OS-level interceptor
-│       │   └── RoomDatabase.kt          ← Local storage
+│       │   ├── IntentNotificationService.java ← OS-level interceptor
+│       │   ├── DriveSafetyEngine.java    ← GPS Velocity lock manager
+│       │   └── db/                       ← Room SQLite local storage
 │       └── assets/
-│           └── intent_model.tflite      ← Trained LSTM model
+│           ├── vocab.json               ← Tokenizer dictionary
+│           └── lstm.tflite              ← Trained LSTM model
 ├── lib/
-│   ├── main.dart
-│   ├── screens/
-│   │   ├── dashboard.dart               ← Home screen
-│   │   ├── insights.dart                ← Analytics & Focus Time
-│   │   ├── audit_log.dart               ← Notification history
-│   │   └── preferences.dart             ← Settings & VIP contacts
-│   ├── services/
-│   │   └── billing_service.dart         ← Google Play Billing
-│   └── providers/                       ← Riverpod state
+│   ├── core/                            ← Theme, Services, State
+│   ├── data/                            ← Models, Repositories
+│   ├── features/                        ← Feature-based folders
+│   │   ├── analytics/                   ← AI Coach & Time Focus
+│   │   ├── engine/                      ← Main Engine UI
+│   │   ├── home/                        ← Timeline Dashboard
+│   │   ├── notifications/               ← Intercept logic interfaces
+│   │   ├── onboarding/                  ← Initial setup
+│   │   └── settings/                    ← Rules, VIPs & Preferences
+│   └── main.dart                        ← App Entrypoint
 ├── assets/
+│   └── docs/                            ← High-res system diagrams
+├── .env                                 ← Hidden environment variables
 └── README.md
 ```
 
@@ -223,7 +228,7 @@ Google Solution Challenge 2026
 
 ## License
 
-This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+This project is fully open source.
 
 ---
 
@@ -239,3 +244,4 @@ This project is licensed under the MIT License — see the [LICENSE](LICENSE) fi
 <div align="center">
   <em>Built with intention. Protecting yours.</em>
 </div>
+
