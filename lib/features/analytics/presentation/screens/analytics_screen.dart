@@ -182,7 +182,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
         if (apiKey.isEmpty) {
           throw Exception('API Key is missing or empty! Please check your .env file and fully restart the app (Stop and start again).');
         }
-        final model = GenerativeModel(model: 'gemini-2.5-flash', apiKey: apiKey);
+        
         final dateStrStart = start.toLocal().toString().split(' ')[0];
         final dateStrEnd = end.toLocal().toString().split(' ')[0];
 
@@ -200,8 +200,22 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
             'A simple markdown bulleted list of 2 short focus strategies referencing their peak traffic hours.\n\n'
             'IMPORTANT: Maintain strict privacy. Rely exclusively on these timestamps and categories rather than assuming content. Keep it simple, readable, and formatting-friendly. Absolutely no emojis, robotic greetings, or all-caps paragraphs.';
         
-        final response = await model.generateContent([Content.text(prompt)]);
-      final aiAnalysis = response.text ?? 'No insights generated.';
+        GenerativeModel model = GenerativeModel(model: 'gemini-2.5-flash', apiKey: apiKey);
+        GenerateContentResponse response;
+        try {
+          response = await model.generateContent([Content.text(prompt)]);
+        } catch (e) {
+          final errStr = e.toString().toLowerCase();
+          if (errStr.contains('503') || errStr.contains('unavailable') || errStr.contains('high demand') || errStr.contains('server error')) {
+            print('Gemini 2.5 Flash is under high demand (503). Falling back to gemini-1.5-flash...');
+            model = GenerativeModel(model: 'gemini-1.5-flash', apiKey: apiKey);
+            response = await model.generateContent([Content.text(prompt)]);
+          } else {
+            rethrow;
+          }
+        }
+        
+        final aiAnalysis = response.text ?? 'No insights generated.';
 
       List<pw.Widget> buildAiInsights(String text) {
         final List<pw.Widget> widgets = [];
