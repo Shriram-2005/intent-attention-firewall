@@ -203,26 +203,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
         GenerativeModel model = GenerativeModel(model: 'gemini-2.5-flash', apiKey: apiKey);
         GenerateContentResponse? response;
         
-        try {
-          response = await model.generateContent([Content.text(prompt)]);
-        } catch (e) {
-          print('Gemini 2.5 Flash failed: ${e.toString()}');
-          try {
-            print('Falling back to gemini-2.5-pro...');
-            model = GenerativeModel(model: 'gemini-2.5-pro', apiKey: apiKey);
-            response = await model.generateContent([Content.text(prompt)]);
-          } catch (e2) {
-            try {
-              print('Falling back to gemini-1.5-pro...');
-              model = GenerativeModel(model: 'gemini-1.5-pro', apiKey: apiKey);
-              response = await model.generateContent([Content.text(prompt)]);
-            } catch (e3) {
-              print('Falling back to absolute default gemini-pro...');
-              model = GenerativeModel(model: 'gemini-pro', apiKey: apiKey);
-              response = await model.generateContent([Content.text(prompt)]);
-            }
-          }
-        }
+        response = await model.generateContent([Content.text(prompt)]);
         
         final aiAnalysis = response?.text ?? 'No insights generated.';
 
