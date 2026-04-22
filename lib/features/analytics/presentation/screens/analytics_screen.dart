@@ -200,7 +200,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
             'A simple markdown bulleted list of 2 short focus strategies referencing their peak traffic hours.\n\n'
             'IMPORTANT: Maintain strict privacy. Rely exclusively on these timestamps and categories rather than assuming content. Keep it simple, readable, and formatting-friendly. Absolutely no emojis, robotic greetings, or all-caps paragraphs.';
         
-        GenerativeModel model = GenerativeModel(model: 'gemini-2.5-flash', apiKey: apiKey);
+        // Using gemini-pro as it has much higher availability and rate limits than experimental 2.5
+        GenerativeModel model = GenerativeModel(model: 'gemini-pro', apiKey: apiKey);
         GenerateContentResponse? response;
         
         int maxRetries = 3;
@@ -214,7 +215,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
             currentTry++;
             final errStr = e.toString().toLowerCase();
             if ((errStr.contains('503') || errStr.contains('unavailable') || errStr.contains('high demand') || errStr.contains('server error')) && currentTry < maxRetries) {
-              print('Gemini 2.5 Flash 503 Error. Retrying $currentTry/$maxRetries in 2 seconds...');
+              print('Gemini API 503 Error. Retrying $currentTry/$maxRetries in 2 seconds...');
               await Future.delayed(const Duration(seconds: 2));
             } else {
               rethrow;
