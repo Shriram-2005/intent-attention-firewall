@@ -178,7 +178,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
         }).join(', ');
 
         const apiKey =
-            'AIzaSyCXZ353Ue7ybcAGTBMu956YWAErp4ektaI'; // Replace with a secure key injection method later
+            ''; // Replace with your api key if you want to test the AI generation. The app will work fully without it, just without the AI insights feature.
         final model = GenerativeModel(model: 'gemini-2.5-flash', apiKey: apiKey);
         final dateStrStart = start.toLocal().toString().split(' ')[0];
         final dateStrEnd = end.toLocal().toString().split(' ')[0];
