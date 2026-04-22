@@ -1,0 +1,69 @@
+# =========================
+# Flutter / Dart
+# =========================
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub/
+build/
+
+# =========================
+# Android / Gradle
+# =========================
+android/.gradle/
+android/build/
+android/local.properties
+android/.kotlin/
+*.iml
+
+# =========================
+# IDE files
+# =========================
+.idea/
+.vscode/
+*.iml
+
+# =========================
+# Logs & temp files
+# =========================
+*.log
+*.tmp
+*.temp
+*.txt
+
+# =========================
+# OS files
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# Generated / cache files
+# =========================
+*.lock
+*.cache
+*.bak
+
+# =========================
+# Sensitive / local configs
+# =========================
+.env
+key.properties
+
+# =========================
+# Optional (your case)
+# =========================
+# If these are just notes/debug files:
+errors.txt
+raw_errors.txt
+result.txt
+single_result.txt
+temp.txt
+temp_analytics_tail.txt
+modal_code.txt
+filebackup.md
+files.txt
+
+
+LICENSE
