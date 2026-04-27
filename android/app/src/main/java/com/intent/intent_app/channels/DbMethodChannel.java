@@ -215,8 +215,14 @@ public class DbMethodChannel {
             }
 
             case "notifications.exportDatabase": {
-                // Ensure recent writes are moved to the main database file
-                com.intent.intent_app.db.IntentDatabase.getInstance(context).getOpenHelper().getWritableDatabase().query("PRAGMA wal_checkpoint(TRUNCATE)");
+                // Safely close the database to force a WAL checkpoint and merge all data into the main file
+                android.database.Cursor c = com.intent.intent_app.db.IntentDatabase.getInstance(context)
+                        .query("PRAGMA wal_checkpoint(TRUNCATE)", null);
+                if (c != null) {
+                    c.moveToFirst();
+                    c.close();
+                }
+                com.intent.intent_app.db.IntentDatabase.resetInstance();
                 
                 java.io.File dbPath = context.getDatabasePath("intent_database");
                 java.io.File backupDir = new java.io.File(context.getCacheDir(), "intent_backups");
@@ -238,8 +244,11 @@ public class DbMethodChannel {
                 String sourcePath = call.argument("filePath");
                 if (sourcePath == null) return false;
                 
+                // Block the IntentNotificationService from touching the database
+                com.intent.intent_app.db.IntentDatabase.isLockedForRestore = true;
+                
                 // Close the DB before overwriting
-                com.intent.intent_app.db.IntentDatabase.getInstance(context).close();
+                com.intent.intent_app.db.IntentDatabase.resetInstance();
                 
                 java.io.File sourceFile = new java.io.File(sourcePath);
                 java.io.File dbPath = context.getDatabasePath("intent_database");
@@ -257,9 +266,16 @@ public class DbMethodChannel {
                     while ((len = fis.read(buffer)) > 0) {
                         fos.write(buffer, 0, len);
                     }
+                    fos.flush();
+                    fos.getFD().sync(); // CRITICAL: Force OS to write to flash memory before JVM termination!
+                } catch (Exception e) {
+                    com.intent.intent_app.db.IntentDatabase.isLockedForRestore = false;
+                    throw new RuntimeException("DB Import Error: " + e.getMessage(), e);
                 }
-                // Force process kill so the app fully restarts with the new database
-                System.exit(0);
+
+                // If we succeeded, we can leave the lock true because SystemNavigator.pop() will 
+                // gracefully destroy the app anyway.
+                com.intent.intent_app.db.IntentDatabase.isLockedForRestore = false;
                 return true;
             }
 

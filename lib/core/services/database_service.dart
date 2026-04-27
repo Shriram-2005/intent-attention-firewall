@@ -67,13 +67,9 @@ class DatabaseService {
     }
   }
 
-  /// Imports a .db file. WARNING: Android will process.kill() instantly after restoring to refresh Room!
+  /// Imports a .db file.
   Future<void> importDatabase(String sourcePath) async {
-    try {
-      await _dbChannel.invokeMethod('notifications.importDatabase', {'filePath': sourcePath});
-    } catch (e) {
-      print('Failed to import DB: $e');
-    }
+    await _dbChannel.invokeMethod('notifications.importDatabase', {'filePath': sourcePath});
   }
 
   /// Calculates real-time metric counters globally for today.

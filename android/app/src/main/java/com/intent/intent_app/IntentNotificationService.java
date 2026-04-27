@@ -194,6 +194,11 @@ public class IntentNotificationService extends NotificationListenerService {
             int classification = intentBrain.classifyNotification(fullContext);
             long inferenceLatency = System.currentTimeMillis() - inferenceStartMs;
 
+            if (classification == -2) {
+                Log.i(TAG, "Absolute VIP Bypass Interception: Handing entirely to OS.");
+                return;
+            }
+
             // Compute Cognitive Context Multiplier with Adaptive Weights
             android.content.SharedPreferences weightPrefs = getSharedPreferences("intent_adaptive_weights", android.content.Context.MODE_PRIVATE);
             float contextMultiplier = weightPrefs.getFloat("default_weight", 1.5f); 
@@ -233,7 +238,7 @@ public class IntentNotificationService extends NotificationListenerService {
             }
 
             // [DO OR DIE] Velocity Blockade
-            if (isMovingFast && classification != 0) { // Wipe anything that is not Urgent
+            if (isMovingFast) { // Wipe EVERYTHING that is not VIP
                 cancelNotification(sbn.getKey());
                 Log.w(TAG, "VELOCITY SAFETY BLOCKADE -> Instantly vaporized " + packageName);
                 if (!isGroupSummary) {
@@ -338,6 +343,10 @@ public class IntentNotificationService extends NotificationListenerService {
         if (score != 0.0f) {
             final float finalScore = score;
             java.util.concurrent.Executors.newSingleThreadExecutor().execute(() -> {
+                if (com.intent.intent_app.db.IntentDatabase.isLockedForRestore) {
+                    Log.w(TAG, "DB Locked for restore. Skipping feedback score update.");
+                    return;
+                }
                 // Determine context explicitly dynamically or use original context multiplier if needed
                 // For now we persist the explicit TTD to the local DB immediately
                 com.intent.intent_app.db.IntentDatabase.getInstance(this)
@@ -425,6 +434,10 @@ public class IntentNotificationService extends NotificationListenerService {
      */
     private void logToDatabase(String packageName, String title, String text, int category, long timestamp, long inferenceLatency, float contextMultiplier) {
         java.util.concurrent.Executors.newSingleThreadExecutor().execute(() -> {
+            if (com.intent.intent_app.db.IntentDatabase.isLockedForRestore) {
+                Log.w(TAG, "DB Locked for restore. Skipping notification log.");
+                return;
+            }
             try {
                 com.intent.intent_app.db.entities.NotificationEntity entity = new com.intent.intent_app.db.entities.NotificationEntity(
                     packageName, title, text, timestamp, category, inferenceLatency, contextMultiplier

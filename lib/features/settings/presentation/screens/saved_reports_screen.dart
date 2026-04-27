@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:open_filex/open_filex.dart';
 import '../../../../core/theme/app_theme.dart';
 
 class SavedReportsScreen extends StatefulWidget {
@@ -167,7 +168,17 @@ class _SavedReportsScreenState extends State<SavedReportsScreen> {
                           ),
                         ],
                       ),
-                      onTap: () => _shareReport(report),
+                      onTap: () async {
+                        final result = await OpenFilex.open(report.path);
+                        if (result.type != ResultType.done && mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Could not open file: ${result.message}'),
+                              backgroundColor: AppTheme.urgentAccent,
+                            ),
+                          );
+                        }
+                      },
                     );
                   },
                 ),

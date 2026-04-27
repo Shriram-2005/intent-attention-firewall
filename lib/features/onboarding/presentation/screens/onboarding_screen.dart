@@ -42,6 +42,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     // Request Core Native Permissions
     await DatabaseService().requestAccess();
     
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('has_seen_onboarding', true);
+
     if (mounted) {
       context.go('/'); // Warp to Dashboard
     }

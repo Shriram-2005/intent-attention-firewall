@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../core/theme/app_theme.dart';
 
 class TelemetryScreen extends StatefulWidget {
@@ -20,6 +21,7 @@ class _TelemetryScreenState extends State<TelemetryScreen> {
   double _targetHeading = 0.0; // The continuously expanding unwrapped angle
   bool _hasPermission = false;
   bool _isLoading = true;
+  int _threshold = 20;
 
   @override
   void initState() {
@@ -42,9 +44,13 @@ class _TelemetryScreenState extends State<TelemetryScreen> {
     }
 
     if (mounted) {
+      final prefs = await SharedPreferences.getInstance();
       setState(() {
         _hasPermission = status.isGranted;
         _isLoading = false;
+        int t = prefs.getInt('driving_speed_threshold') ?? 20;
+        if (![20, 30, 40, 50, 60].contains(t)) t = 20;
+        _threshold = t;
       });
 
       if (_hasPermission) {
@@ -99,17 +105,18 @@ class _TelemetryScreenState extends State<TelemetryScreen> {
                 ? const Center(child: CircularProgressIndicator(color: Colors.white24))
                 : !_hasPermission
                   ? _buildPermissionDeniedUI()
-                  : Center(
-                      child: SingleChildScrollView(
-                        physics: const BouncingScrollPhysics(),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            _buildCompass(),
-                            const SizedBox(height: 64),
-                            _buildSpeedometer(),
-                          ],
-                        ),
+                  : SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(),
+                      padding: const EdgeInsets.only(bottom: 64, top: 24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          _buildCompass(),
+                          const SizedBox(height: 48),
+                          _buildSpeedometer(),
+                          const SizedBox(height: 48),
+                          _buildThresholdSelector(),
+                        ],
                       ),
                     ),
             ),
@@ -219,6 +226,97 @@ class _TelemetryScreenState extends State<TelemetryScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildThresholdSelector() {
+    final Map<int, String> options = {
+      20: 'Safest',
+      30: 'Strict',
+      40: 'Standard',
+      50: 'Lenient',
+      60: 'Highway Only',
+    };
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 24),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceElevated,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.2),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          )
+        ]
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.speed, color: AppTheme.urgentAccent, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                'DRIVING THRESHOLD',
+                style: GoogleFonts.inter(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.5,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          DropdownButtonFormField<int>(
+            value: _threshold,
+            dropdownColor: AppTheme.surfaceDark,
+            icon: const Icon(Icons.expand_more, color: Colors.white70),
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: Colors.black.withOpacity(0.3),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: AppTheme.urgentAccent),
+              ),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            ),
+            items: options.entries.map((e) {
+              return DropdownMenuItem<int>(
+                value: e.key,
+                child: Text(
+                  '${e.key} KM/H - ${e.value}',
+                  style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                ),
+              );
+            }).toList(),
+            onChanged: (val) async {
+              if (val != null) {
+                setState(() => _threshold = val);
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setInt('driving_speed_threshold', val);
+              }
+            },
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'If your speed exceeds this threshold, the Do-Or-Die Engine will block all notifications except absolute VIPs.',
+            style: GoogleFonts.inter(color: Colors.white38, fontSize: 12, height: 1.4),
+          ),
+        ],
+      ),
     );
   }
 

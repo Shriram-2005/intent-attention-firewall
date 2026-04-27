@@ -20,6 +20,7 @@ public abstract class IntentDatabase extends RoomDatabase {
 
     private static final String DB_NAME = "intent_database";
     private static volatile IntentDatabase INSTANCE;
+    public static volatile boolean isLockedForRestore = false;
 
     public abstract NotificationDao notificationDao();
 
@@ -68,5 +69,12 @@ public abstract class IntentDatabase extends RoomDatabase {
             }
         }
         return INSTANCE;
+    }
+
+    public static void resetInstance() {
+        if (INSTANCE != null) {
+            INSTANCE.close();
+            INSTANCE = null;
+        }
     }
 }

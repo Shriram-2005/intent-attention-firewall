@@ -178,6 +178,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
           return '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}($cat)';
         }).join(', ');
 
+        if (historyRaw.isEmpty || counts['urgent'] == 0 && counts['buffer'] == 0 && counts['spam'] == 0) {
+          throw Exception('No data available in the selected date range to generate insights.');
+        }
+
         final apiKey = dotenv.env['GEMINI_API_KEY'] ?? ''; 
         if (apiKey.isEmpty) {
           throw Exception('API Key is missing or empty! Please check your .env file and fully restart the app (Stop and start again).');
@@ -385,7 +389,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
                   ],
                 ),
               ),
-              pw.SizedBox(height: 40),
+              pw.SizedBox(height: 24),
               pw.Text(
                 'EXECUTIVE SUMMARY',
                 style: pw.TextStyle(
@@ -415,12 +419,12 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
                   ), // Cyber Grey
                   _buildPdfMetric(
                     'FOCUS SAVED',
-                    '${counts["cognitive_mins"]}m',
+                    '${(counts["cognitive_mins"] as num? ?? 0).toStringAsFixed(2)}m',
                     PdfColor.fromHex('#4DD0E1'),
                   ), // Cyan
                 ],
               ),
-              pw.SizedBox(height: 40),
+              pw.SizedBox(height: 24),
               pw.Text(
                 'BEHAVIORAL INSIGHTS',
                 style: pw.TextStyle(
@@ -444,7 +448,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
                   children: buildAiInsights(aiAnalysis),
                 ),
               ),
-              pw.SizedBox(height: 24),
+              pw.SizedBox(height: 16),
               pw.Center(
                 child: pw.Text(
                   'AI-powered insights are optional and operate only on aggregated metadata. Core functionality remains fully offline and privacy-preserving.\nNo raw notification content is transmitted to the cloud. Only anonymized aggregate statistics are used.',
@@ -455,7 +459,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
                   ),
                 ),
               ),
-              pw.SizedBox(height: 40),
+              pw.SizedBox(height: 16),
             ];
           },
         ),
@@ -642,10 +646,48 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       floatingActionButton: _isAiCoachEnabled
           ? FloatingActionButton(
-              onPressed: () {
+              onPressed: () async {
                 final now = DateTime.now();
-                final start = now.subtract(const Duration(days: 7));
-                _generateAiReport(start, now);
+                final range = await showDateRangePicker(
+                  context: context,
+                  initialDateRange: DateTimeRange(
+                    start: now,
+                    end: now,
+                  ),
+                  firstDate: DateTime(2023),
+                  lastDate: now,
+                  builder: (BuildContext context, Widget? child) {
+                    return Theme(
+                      data: ThemeData.dark().copyWith(
+                        scaffoldBackgroundColor: Colors.black,
+                        colorScheme: const ColorScheme.dark(
+                          primary: Colors.white,
+                          onPrimary: Colors.black,
+                          surface: Colors.black,
+                          onSurface: Colors.white,
+                          secondary: Colors.white,
+                          onSecondary: Colors.black,
+                          secondaryContainer: Colors.white12,
+                          primaryContainer: Colors.white12,
+                          onPrimaryContainer: Colors.white,
+                        ),
+                        dialogBackgroundColor: Colors.black,
+                        appBarTheme: const AppBarTheme(
+                          backgroundColor: Colors.black,
+                          iconTheme: IconThemeData(color: Colors.white),
+                        ),
+                        dividerTheme: const DividerThemeData(color: Colors.white12),
+                      ),
+                      child: child!,
+                    );
+                  },
+                );
+                
+                if (range != null) {
+                   // Ensure the end date covers the entire full day until 23:59:59.999
+                   final endInclusive = DateTime(range.end.year, range.end.month, range.end.day, 23, 59, 59, 999);
+                   _generateAiReport(range.start, endInclusive);
+                }
               },
               backgroundColor: AppTheme.urgentAccent,
               shape: RoundedRectangleBorder(

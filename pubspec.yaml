@@ -52,6 +52,7 @@ dependencies:
   in_app_purchase: ^3.2.3
   flutter_local_notifications: ^20.1.0
   flutter_dotenv: ^6.0.1
+  open_filex: ^4.7.0
 
 dev_dependencies:
   flutter_test:

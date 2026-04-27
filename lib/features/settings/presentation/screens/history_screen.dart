@@ -344,10 +344,8 @@ WidgetsBinding.instance.addObserver(this);
                             if (!categoryMatch) {
                               if (_selectedCategoryFilter == 3) {
                                 final content = ((item['title'] ?? '') + ' ' + (item['text'] ?? '')).toLowerCase();
-                                categoryMatch = content.contains('otp') || content.contains('code') || 
-                                                content.contains('verification') || content.contains('password') || 
-                                                content.contains('security') || content.contains('login') || 
-                                                content.contains('alert') || content.contains('reset');
+                                final RegExp otpRegex = RegExp(r'\b(otp|code|verification|password|security|login|alert|reset)\b');
+                                categoryMatch = otpRegex.hasMatch(content);
                               } else {
                                 categoryMatch = item['category'] == _selectedCategoryFilter;
                               }
@@ -361,10 +359,8 @@ WidgetsBinding.instance.addObserver(this);
                               if (!categoryMatch) {
                                 if (_selectedCategoryFilter == 3) {
                                   final content = ((item['title'] ?? '') + ' ' + (item['text'] ?? '')).toLowerCase();
-                                  categoryMatch = content.contains('otp') || content.contains('code') || 
-                                                  content.contains('verification') || content.contains('password') || 
-                                                  content.contains('security') || content.contains('login') || 
-                                                  content.contains('alert') || content.contains('reset');
+                                  final RegExp otpRegex = RegExp(r'\b(otp|code|verification|password|security|login|alert|reset)\b');
+                                  categoryMatch = otpRegex.hasMatch(content);
                                 } else {
                                   categoryMatch = item['category'] == _selectedCategoryFilter;
                                 }
@@ -432,17 +428,24 @@ WidgetsBinding.instance.addObserver(this);
                                             ),
                                           ],
                                         const SizedBox(height: 6),
-                                        Text(
-                                          item['content'] ?? '',
-                                          style: GoogleFonts.inter(
-                                            color: Colors.white,
-                                            fontSize: 15,
-                                            fontWeight: FontWeight.w400,
-                                            height: 1.3,
-                                          ),
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
+                                        (() {
+                                          String rawContent = item['content'] ?? '';
+                                          final RegExp otpRegex = RegExp(r'\b(otp|code|verification|password|security|login|alert|reset)\b', caseSensitive: false);
+                                          String displayContent = otpRegex.hasMatch(rawContent.toLowerCase()) ? 'Sensitive notification content hidden' : rawContent;
+                                          
+                                          return Text(
+                                            displayContent,
+                                            style: GoogleFonts.inter(
+                                              color: displayContent == 'Sensitive notification content hidden' ? Colors.white54 : Colors.white,
+                                              fontSize: 15,
+                                              fontStyle: displayContent == 'Sensitive notification content hidden' ? FontStyle.italic : FontStyle.normal,
+                                              fontWeight: FontWeight.w400,
+                                              height: 1.3,
+                                            ),
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                          );
+                                        })(),
                                       ],
                                     ),
                                   ),
@@ -700,8 +703,8 @@ WidgetsBinding.instance.addObserver(this);
 
                          Navigator.pop(context);
                          final prefs = await SharedPreferences.getInstance();
-                         String dartKey;
-                         if (category == 0) dartKey = 'vip_keywords';
+                         String dartKey = '';
+                         if (category == 0) dartKey = 'urgent_keywords';
                          else if (category == 1) dartKey = 'buffer_keywords';
                          else dartKey = 'block_keywords';
 
@@ -829,14 +832,24 @@ WidgetsBinding.instance.addObserver(this);
                           const SizedBox(height: 16),
                           Flexible(
                             child: SingleChildScrollView(
-                              child: Text(
-                                item['content'] ?? '',
-                                style: GoogleFonts.inter(
-                                  color: Colors.white70,
-                                  fontSize: 15,
-                                  height: 1.4,
-                                ),
+                            child: SingleChildScrollView(
+                              child: Builder(
+                                builder: (context) {
+                                  String rawContent = item['content'] ?? '';
+                                  final RegExp otpRegex = RegExp(r'\b(otp|code|verification|password|security|login|alert|reset)\b', caseSensitive: false);
+                                  String displayContent = otpRegex.hasMatch(rawContent.toLowerCase()) ? 'Sensitive notification content hidden' : rawContent;
+                                  return Text(
+                                    displayContent,
+                                    style: GoogleFonts.inter(
+                                      color: displayContent == 'Sensitive notification content hidden' ? Colors.white54 : Colors.white70,
+                                      fontStyle: displayContent == 'Sensitive notification content hidden' ? FontStyle.italic : FontStyle.normal,
+                                      fontSize: 15,
+                                      height: 1.4,
+                                    ),
+                                  );
+                                },
                               ),
+                            ),
                             ),
                           ),
                           const SizedBox(height: 32),
@@ -913,10 +926,10 @@ WidgetsBinding.instance.addObserver(this);
                           // NEW DEEP LINK MESSAGE PORTAL BUTTON
                             if (item['timestamp'] != null && item['packageName'] != null) ...[
                               GestureDetector(
-                                onTap: () {
-                                  DatabaseService().launchMessage(item['timestamp'] as int, item['packageName'] as String);
-                                Navigator.pop(context);
-                              },
+                                onTap: () async {
+                                  Navigator.pop(context);
+                                  await DatabaseService().launchMessage(item['timestamp'] as int, item['packageName'] as String);
+                                },
                               behavior: HitTestBehavior.opaque,
                               child: Container(
                                 width: double.infinity,

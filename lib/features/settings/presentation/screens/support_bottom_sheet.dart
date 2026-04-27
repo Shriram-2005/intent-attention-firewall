@@ -169,15 +169,26 @@ class _SupportBottomSheetState extends State<SupportBottomSheet> {
   }
 
   void _buyProduct(String id) {
-    if (!_isAvailable) return;
-    final ProductDetails? product = _products.firstWhere((p) => p.id == id, orElse: () => _products.firstOrNull!);
+    if (!_isAvailable) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Store unavailable', style: GoogleFonts.inter(color: Colors.white)),
+          backgroundColor: AppTheme.urgentAccent,
+        ),
+      );
+      return;
+    }
+    final ProductDetails? product = _products.where((p) => p.id == id).firstOrNull;
     if (product != null) {
       final PurchaseParam purchaseParam = PurchaseParam(productDetails: product);
       _inAppPurchase.buyConsumable(purchaseParam: purchaseParam, autoConsume: true);
     } else {
-      // Mock flow if testing without actual Play Store sync
-      Navigator.pop(context);
-      _showThankYouDialog();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Custom amount ₹${id.replaceAll('support_custom_', '')} not configured in Play Store.', style: GoogleFonts.inter(color: Colors.white)),
+          backgroundColor: AppTheme.urgentAccent,
+        ),
+      );
     }
   }
 
@@ -262,6 +273,81 @@ class _SupportBottomSheetState extends State<SupportBottomSheet> {
     );
   }
 
+  Widget _buildCustomSupportOption() {
+    final TextEditingController amountController = TextEditingController();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceElevated,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white10),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.orangeAccent.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.edit_note, color: Colors.orangeAccent, size: 22),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Custom Amount',
+                  style: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 80,
+            child: TextField(
+              controller: amountController,
+              keyboardType: TextInputType.number,
+              style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+              decoration: InputDecoration(
+                prefixText: '₹',
+                prefixStyle: GoogleFonts.inter(color: Colors.white54, fontSize: 14),
+                hintText: '0',
+                hintStyle: GoogleFonts.inter(color: Colors.white24),
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                filled: true,
+                fillColor: Colors.white10,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          InkWell(
+            onTap: () {
+              final val = amountController.text.trim();
+              if (val.isNotEmpty && int.tryParse(val) != null) {
+                _buyProduct('support_custom_$val');
+              }
+            },
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(color: Colors.orangeAccent, borderRadius: BorderRadius.circular(8)),
+              child: Text('PAY', style: GoogleFonts.inter(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -271,9 +357,15 @@ class _SupportBottomSheetState extends State<SupportBottomSheet> {
       ),
       child: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.only(left: 24, right: 24, bottom: 24, top: 12),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+          padding: EdgeInsets.only(
+            left: 24, 
+            right: 24, 
+            bottom: 24 + MediaQuery.of(context).viewInsets.bottom, 
+            top: 12
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Center(
@@ -331,6 +423,8 @@ class _SupportBottomSheetState extends State<SupportBottomSheet> {
                 defaultPrice: _productMeta['support_large']!['price'],
                 productId: 'support_large',
               ),
+              const SizedBox(height: 12),
+              _buildCustomSupportOption(),
               const SizedBox(height: 32),
               Center(
                 child: Text(
@@ -343,6 +437,7 @@ class _SupportBottomSheetState extends State<SupportBottomSheet> {
               ),
             ],
           ),
+        ),
         ),
       ),
     );

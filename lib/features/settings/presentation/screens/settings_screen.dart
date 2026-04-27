@@ -133,8 +133,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     _buildSectionHeader('AI DIRECTIVES'),
                     const SizedBox(height: 16),
                     _buildSettingsRow(
-                      title: 'VIP Contacts & Keywords',
-                      subtitle: "Manage allowed contacts and detection keywords (e.g., 'OTP').",
+                      title: 'Engine Rules',
+                      subtitle: "Manage VIP bypasses and ML heuristic keywords.",
                       onTap: () {
                         Navigator.push(
                           context,
@@ -330,7 +330,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 64),
+                    const SizedBox(height: 24),
                   ],
                 ),
               ),

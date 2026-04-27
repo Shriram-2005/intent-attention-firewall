@@ -12,6 +12,9 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.WorkManager
 import java.util.concurrent.TimeUnit
 import android.app.AppOpsManager
+import android.media.RingtoneManager
+import android.app.Activity
+import android.net.Uri
 
 class MainActivity : FlutterActivity() {
 

@@ -118,9 +118,44 @@ public class DriveSafetyEngine implements LocationListener, SensorEventListener 
         // assume we are no longer driving to prevent indefinitely locking the device 
         // if the user goes into a tunnel or underground garage.
         if (System.currentTimeMillis() - lastLocationTimestamp > 120000) {
-            isDriving = false;
+            setDrivingState(false);
         }
         return isDriving;
+    }
+
+    private void setDrivingState(boolean newState) {
+        if (this.isDriving == newState) return;
+        this.isDriving = newState;
+        
+        android.app.NotificationManager nm = (android.app.NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (nm == null) return;
+
+        if (this.isDriving) {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                android.app.NotificationChannel channel = new android.app.NotificationChannel(
+                        "driving_mode_channel",
+                        "Driving Mode Alerts",
+                        android.app.NotificationManager.IMPORTANCE_DEFAULT);
+                nm.createNotificationChannel(channel);
+            }
+            
+            android.app.Notification.Builder builder;
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                builder = new android.app.Notification.Builder(context, "driving_mode_channel");
+            } else {
+                builder = new android.app.Notification.Builder(context);
+            }
+            
+            android.app.Notification notif = builder
+                    .setContentTitle("Driving Mode Enabled")
+                    .setContentText("Do-Or-Die engine active. Only VIP contacts allowed.")
+                    .setSmallIcon(android.R.drawable.ic_dialog_map)
+                    .setOngoing(true)
+                    .build();
+            nm.notify(9999, notif);
+        } else {
+            nm.cancel(9999);
+        }
     }
 
     // --- LOCATION LISTENER ---
@@ -133,13 +168,16 @@ public class DriveSafetyEngine implements LocationListener, SensorEventListener 
             float speedMs = location.getSpeed();
             this.currentSpeedKmh = (int) (speedMs * 3.6f);
 
-            // Do or Die Threshold
-            this.isDriving = this.currentSpeedKmh >= 20;
+            android.content.SharedPreferences prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE);
+            long thresholdLong = prefs.getLong("flutter.driving_speed_threshold", 20L);
+            int threshold = (int) thresholdLong;
+
+            setDrivingState(this.currentSpeedKmh >= threshold);
 
             pushTelemetrySlice();
         } else {
             // If GPS regains signal but cannot calculate vector speed yet, gracefully decay
-            this.isDriving = false;
+            setDrivingState(false);
         }
     }
 

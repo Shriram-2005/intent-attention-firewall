@@ -131,6 +131,8 @@ public class IntentBrain {
             
             int heuristicResult = executeHeuristicMatching(text, prefs);
             
+            if (heuristicResult == -2) return -2; // VIP Strict Bypass
+            
             if (engineType == 0) {
                 // RUN EXPLICIT HEURISTIC ENGINE ONLY
                 return heuristicResult == -1 ? 1 : heuristicResult; // 1 (Buffer) is the final safe fallback if heuristic returns -1
@@ -235,17 +237,17 @@ public class IntentBrain {
         }
         return digits >= 6;
     }
-
     private int executeHeuristicMatching(String text, SharedPreferences prefs) {
         // Safe Extraction of Flutter SharedPreferences explicitly parsing JSON arrays
-        java.util.ArrayList<String> rawVipList = parseFlutterListSafely(prefs.getAll().get("flutter.vip_keywords"));
+        java.util.ArrayList<String> rawAbsoluteVipList = parseFlutterListSafely(prefs.getAll().get("flutter.absolute_vip_keywords"));
+        java.util.ArrayList<String> rawUrgentList = parseFlutterListSafely(prefs.getAll().get("flutter.urgent_keywords"));
         java.util.ArrayList<String> rawBufferList = parseFlutterListSafely(prefs.getAll().get("flutter.buffer_keywords"));
         java.util.ArrayList<String> rawSpamList = parseFlutterListSafely(prefs.getAll().get("flutter.block_keywords"));
 
-        // 0. The Raw Substring Match Matrix (For VIP Contacts, Emails, and normalized Phones)
+        // 0. The Raw Substring Match Matrix (For Absolute VIP Contacts, Emails, and normalized Phones)
         String rawLowerText = text.toLowerCase();
         
-        for (String vipContext : rawVipList) {
+        for (String vipContext : rawAbsoluteVipList) {
             if (vipContext.length() > 2) {
                 // Advanced Normalized Phone Validation
                 if (isPhoneNumber(vipContext)) {
@@ -253,13 +255,31 @@ public class IntentBrain {
                     String numericText = rawLowerText.replaceAll("[^0-9+]", "");
                     if (numericVip.length() >= 6 && numericText.contains(numericVip)) {
                         Log.i(TAG, "Heuristic Matched NUMERIC VIP Context: " + numericVip);
-                        return 0; // Urgent
+                        return -2; // VIP Strict Bypass
                     }
                 }
 
                 // Standard Substring Validation
                 if (rawLowerText.contains(vipContext)) {
                     Log.i(TAG, "Heuristic Matched RAW VIP Context (Email/Contact): " + vipContext);
+                    return -2; // VIP Strict Bypass
+                }
+            }
+        }
+        
+        // 0.25 Urgent ML Override
+        for (String urgentContext : rawUrgentList) {
+            if (urgentContext.length() > 2) {
+                if (isPhoneNumber(urgentContext)) {
+                    String numericUrgent = urgentContext.replaceAll("[^0-9+]", "");
+                    String numericText = rawLowerText.replaceAll("[^0-9+]", "");
+                    if (numericUrgent.length() >= 6 && numericText.contains(numericUrgent)) {
+                        Log.i(TAG, "Heuristic Matched NUMERIC URGENT Context: " + numericUrgent);
+                        return 0; // Urgent
+                    }
+                }
+                if (rawLowerText.contains(urgentContext)) {
+                    Log.i(TAG, "Heuristic Matched RAW URGENT Context: " + urgentContext);
                     return 0; // Urgent
                 }
             }
@@ -283,6 +303,15 @@ public class IntentBrain {
         // 1. Rigorous Normalization & Tokenization for remaining tiers
         String strippedText = rawLowerText.replaceAll("[^a-zA-Z0-9 ]", "");
         String[] notificationWords = strippedText.split("\\s+");
+
+        // 1.5 Strict OTP/Security Override
+        for (String word : notificationWords) {
+            if (word.equals("otp") || word.equals("code") || word.equals("verification") || 
+                word.equals("password") || word.equals("security") || word.equals("login") || word.equals("alert")) {
+                Log.i(TAG, "Heuristic Matched Strict SECURITY/OTP Keyword: " + word);
+                return 0; // Force to Urgent
+            }
+        }
 
         // 3. The Remaining 6-Tier Waterfall Search Matrix
         // Sweep 1: Absolute Priority (URGENT) ensures critical overrides always survive

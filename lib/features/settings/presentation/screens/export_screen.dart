@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:file_picker/file_picker.dart';
@@ -153,7 +154,7 @@ class _ExportScreenState extends State<ExportScreen> {
         
         await Future.delayed(const Duration(milliseconds: 1500));
         await DatabaseService().importDatabase(filePath);
-        // The Android side will forcefully execute System.exit(0) upon success to safely load the new Room DB.
+        SystemNavigator.pop();
       }
     } catch (e) {
       if (!mounted) return;
