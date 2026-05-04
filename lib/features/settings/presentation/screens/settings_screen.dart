@@ -12,6 +12,7 @@ import 'export_screen.dart';
 import 'training_screen.dart';
 import 'telemetry_screen.dart';
 import 'support_bottom_sheet.dart';
+import 'app_manager_screen.dart';
 import 'package:go_router/go_router.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -91,9 +92,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Navigator.pop(context);
                 await DatabaseService().deleteAllHistory();
                 final prefs = await SharedPreferences.getInstance();
-                // We keep some prefs, but we can clean out VIP or others if requested. 
-                // Mostly the user just wants the "database" flushed for factory reset.
-                // We'll trust deleteAllHistory() handles the db. 
                 EngineState.notifyDatabaseUpdated();
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text('All Data Purged Successfully.', style: GoogleFonts.inter(color: Colors.white)), backgroundColor: Colors.redAccent),
@@ -139,6 +137,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(builder: (context) => const VipManagerScreen()),
+                        );
+                      },
+                    ),
+                    _buildDivider(),
+                    _buildSettingsRow(
+                      title: 'App Classifications',
+                      subtitle: "Configure distraction states and ignore system noise.",
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const AppManagerScreen()),
                         );
                       },
                     ),

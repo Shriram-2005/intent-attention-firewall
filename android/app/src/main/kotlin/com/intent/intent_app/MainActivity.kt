@@ -47,11 +47,7 @@ class MainActivity : FlutterActivity() {
             24
         }
 
-        val requestBuilder = if (intervalHours == 1) {
-            PeriodicWorkRequestBuilder<IntentSummaryWorker>(15, TimeUnit.MINUTES)
-        } else {
-            PeriodicWorkRequestBuilder<IntentSummaryWorker>(intervalHours.toLong(), TimeUnit.HOURS)
-        }
+        val requestBuilder = PeriodicWorkRequestBuilder<IntentSummaryWorker>(intervalHours.toLong(), TimeUnit.HOURS)
 
         WorkManager.getInstance(applicationContext).enqueueUniquePeriodicWork(
             "IntentSummaryWork",
@@ -108,12 +104,7 @@ class MainActivity : FlutterActivity() {
                 if (call.method == "settings.updateSummaryInterval") {
                     val intervalHours = call.argument<Int>("intervalHours") ?: 24
                     
-                    val requestBuilder = if (intervalHours == 1) {
-                        // 1 Hour UI selection maps to the 15-minute aggressive test mode
-                        PeriodicWorkRequestBuilder<IntentSummaryWorker>(15, TimeUnit.MINUTES)
-                    } else {
-                        PeriodicWorkRequestBuilder<IntentSummaryWorker>(intervalHours.toLong(), TimeUnit.HOURS)
-                    }
+                    val requestBuilder = PeriodicWorkRequestBuilder<IntentSummaryWorker>(intervalHours.toLong(), TimeUnit.HOURS)
 
                     WorkManager.getInstance(applicationContext).enqueueUniquePeriodicWork(
                         "IntentSummaryWork",
@@ -121,6 +112,20 @@ class MainActivity : FlutterActivity() {
                         requestBuilder.build()
                     )
                     
+                    result.success(true)
+                } else if (call.method == "settings.syncKeywords") {
+                    val intent = Intent("com.intent.intent_app.SYNC_KEYWORDS")
+                    val abs = call.argument<List<String>>("absolute_vip")
+                    val urg = call.argument<List<String>>("urgent")
+                    val buf = call.argument<List<String>>("buffer")
+                    val spam = call.argument<List<String>>("spam")
+                    if (abs != null) intent.putStringArrayListExtra("absolute_vip", ArrayList(abs))
+                    if (urg != null) intent.putStringArrayListExtra("urgent", ArrayList(urg))
+                    if (buf != null) intent.putStringArrayListExtra("buffer", ArrayList(buf))
+                    if (spam != null) intent.putStringArrayListExtra("spam", ArrayList(spam))
+                    
+                    intent.setPackage(packageName)
+                    sendBroadcast(intent)
                     result.success(true)
                 } else if (call.method == "settings.updateEndOfDay") {
                     val hour = call.argument<Int>("hour") ?: 21
@@ -147,6 +152,11 @@ class MainActivity : FlutterActivity() {
                         ExistingPeriodicWorkPolicy.REPLACE,
                         requestBuilder.build()
                     )
+                    result.success(true)
+                } else if (call.method == "settings.purgeDatabase") {
+                    Thread {
+                        com.intent.intent_app.db.IntentDatabase.getInstance(applicationContext).notificationDao().deleteAllHistory()
+                    }.start()
                     result.success(true)
                 } else {
                     result.notImplemented()

@@ -105,6 +105,7 @@ public class DbMethodChannel {
                 return new ArrayList<>();
             }
 
+
             case "notifications.deleteHistoryBefore": {
                 Object timestampObj = call.argument("timestamp");
                 if (timestampObj instanceof Number) {

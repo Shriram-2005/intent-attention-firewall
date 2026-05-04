@@ -63,6 +63,18 @@ class _VipManagerScreenState extends State<VipManagerScreen> with SingleTickerPr
     await prefs.setStringList('urgent_keywords', _urgentKeywords);
     await prefs.setStringList('buffer_keywords', _bufferKeywords);
     await prefs.setStringList('block_keywords', _blockKeywords);
+
+    const platform = MethodChannel('com.intent.intent_app/settings');
+    try {
+      await platform.invokeMethod('settings.syncKeywords', {
+        'absolute_vip': _absoluteVipKeywords,
+        'urgent': _urgentKeywords,
+        'buffer': _bufferKeywords,
+        'spam': _blockKeywords,
+      });
+    } catch (e) {
+      debugPrint("Failed to sync keywords natively: $e");
+    }
   }
 
 

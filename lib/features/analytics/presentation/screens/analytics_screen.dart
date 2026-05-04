@@ -1056,17 +1056,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
     );
   }
 
-  List<FlSpot> _getTemporalMockData() {
-    return const [
-      FlSpot(0, 10),
-      FlSpot(6, 40),
-      FlSpot(9, 120),
-      FlSpot(12, 90),
-      FlSpot(18, 150),
-      FlSpot(24, 30),
-    ];
-  }
-
   Widget _buildTemporalChart() {
     return _buildChartContainer(
       title: '24HR VOLUME',
@@ -1133,15 +1122,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
     );
   }
 
-  List<RadarEntry> _getContextualMockData() {
-    return const [
-      RadarEntry(value: 80), // Focus (Deep Work)
-      RadarEntry(value: 50), // Driving
-      RadarEntry(value: 90), // Night
-      RadarEntry(value: 30), // Default
-    ];
-  }
-
   Widget _buildContextualChart() {
     return _buildChartContainer(
       title: 'CONTEXTUAL STATES',
@@ -1184,35 +1164,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
         ),
       ),
     );
-  }
-
-  List<PieChartSectionData> _getSourceMockData() {
-    return [
-      PieChartSectionData(
-        value: 40,
-        color: AppTheme.spamAccent,
-        radius: 15,
-        showTitle: false,
-      ),
-      PieChartSectionData(
-        value: 30,
-        color: AppTheme.urgentAccent,
-        radius: 15,
-        showTitle: false,
-      ),
-      PieChartSectionData(
-        value: 15,
-        color: AppTheme.bufferAccent,
-        radius: 15,
-        showTitle: false,
-      ),
-      PieChartSectionData(
-        value: 15,
-        color: Colors.white24,
-        radius: 15,
-        showTitle: false,
-      ),
-    ];
   }
 
   Widget _buildSourceChart() {
@@ -1264,18 +1215,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
         ),
       ],
     );
-  }
-
-  List<FlSpot> _getRoiMockData() {
-    return const [
-      FlSpot(1, 20),
-      FlSpot(2, 50),
-      FlSpot(3, 90),
-      FlSpot(4, 150),
-      FlSpot(5, 230),
-      FlSpot(6, 300),
-      FlSpot(7, 390),
-    ];
   }
 
   Widget _buildRoiChart() {

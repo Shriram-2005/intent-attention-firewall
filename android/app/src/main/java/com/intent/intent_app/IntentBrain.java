@@ -25,6 +25,26 @@ public class IntentBrain {
     private boolean isInitialized = false;
     private Context mContext;
 
+    public static java.util.ArrayList<String> cachedAbsoluteVip = null;
+    public static java.util.ArrayList<String> cachedUrgent = null;
+    public static java.util.ArrayList<String> cachedBuffer = null;
+    public static java.util.ArrayList<String> cachedSpam = null;
+
+    public void forceReloadKeywords(android.content.Intent intent) {
+        if (intent.hasExtra("absolute_vip")) {
+            cachedAbsoluteVip = intent.getStringArrayListExtra("absolute_vip");
+        }
+        if (intent.hasExtra("urgent")) {
+            cachedUrgent = intent.getStringArrayListExtra("urgent");
+        }
+        if (intent.hasExtra("buffer")) {
+            cachedBuffer = intent.getStringArrayListExtra("buffer");
+        }
+        if (intent.hasExtra("spam")) {
+            cachedSpam = intent.getStringArrayListExtra("spam");
+        }
+    }
+
     public IntentBrain(Context context) {
         mContext = context;
         try {
@@ -184,7 +204,7 @@ public class IntentBrain {
         }
     }
 
-        private java.util.ArrayList<String> parseFlutterListSafely(Object prefObj) {
+    public static java.util.ArrayList<String> parseFlutterListSafely(Object prefObj) {
         java.util.ArrayList<String> list = new java.util.ArrayList<>();
         if (prefObj == null) return list;
 
@@ -239,10 +259,10 @@ public class IntentBrain {
     }
     private int executeHeuristicMatching(String text, SharedPreferences prefs) {
         // Safe Extraction of Flutter SharedPreferences explicitly parsing JSON arrays
-        java.util.ArrayList<String> rawAbsoluteVipList = parseFlutterListSafely(prefs.getAll().get("flutter.absolute_vip_keywords"));
-        java.util.ArrayList<String> rawUrgentList = parseFlutterListSafely(prefs.getAll().get("flutter.urgent_keywords"));
-        java.util.ArrayList<String> rawBufferList = parseFlutterListSafely(prefs.getAll().get("flutter.buffer_keywords"));
-        java.util.ArrayList<String> rawSpamList = parseFlutterListSafely(prefs.getAll().get("flutter.block_keywords"));
+        java.util.ArrayList<String> rawAbsoluteVipList = cachedAbsoluteVip != null ? cachedAbsoluteVip : parseFlutterListSafely(prefs.getAll().get("flutter.absolute_vip_keywords"));
+        java.util.ArrayList<String> rawUrgentList = cachedUrgent != null ? cachedUrgent : parseFlutterListSafely(prefs.getAll().get("flutter.urgent_keywords"));
+        java.util.ArrayList<String> rawBufferList = cachedBuffer != null ? cachedBuffer : parseFlutterListSafely(prefs.getAll().get("flutter.buffer_keywords"));
+        java.util.ArrayList<String> rawSpamList = cachedSpam != null ? cachedSpam : parseFlutterListSafely(prefs.getAll().get("flutter.block_keywords"));
 
         // 0. The Raw Substring Match Matrix (For Absolute VIP Contacts, Emails, and normalized Phones)
         String rawLowerText = text.toLowerCase();
@@ -307,7 +327,7 @@ public class IntentBrain {
         // 1.5 Strict OTP/Security Override
         for (String word : notificationWords) {
             if (word.equals("otp") || word.equals("code") || word.equals("verification") || 
-                word.equals("password") || word.equals("security") || word.equals("login") || word.equals("alert")) {
+                word.equals("2fa") || word.equals("authentication")) {
                 Log.i(TAG, "Heuristic Matched Strict SECURITY/OTP Keyword: " + word);
                 return 0; // Force to Urgent
             }

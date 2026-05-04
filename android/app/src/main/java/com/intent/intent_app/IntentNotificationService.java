@@ -32,17 +32,25 @@ public class IntentNotificationService extends NotificationListenerService {
     private IntentBrain intentBrain;
 
     // Social Media apps to track Context-Aware Distraction State
-    private static final List<String> SOCIAL_MEDIA_PACKAGES = Arrays.asList(
-            "com.instagram.android",
-            "com.zhiliaoapp.musically", // TikTok
-            "com.twitter.android",
-            "com.facebook.katana",
-            "com.snapchat.android",
-            "com.reddit.frontpage",
-            "tv.twitch.android",
-            "com.pinterest",
-            "com.google.android.youtube"
-    );
+    private List<String> getSocialMediaPackages() {
+        android.content.SharedPreferences prefs = getApplicationContext().getSharedPreferences("FlutterSharedPreferences", android.content.Context.MODE_PRIVATE);
+        Object raw = prefs.getAll().get("flutter.social_media_packages");
+        if (raw != null) {
+            java.util.List<String> list = com.intent.intent_app.IntentBrain.parseFlutterListSafely(raw);
+            if (!list.isEmpty()) return list;
+        }
+        return Arrays.asList(
+                "com.instagram.android",
+                "com.zhiliaoapp.musically", // TikTok
+                "com.twitter.android",
+                "com.facebook.katana",
+                "com.snapchat.android",
+                "com.reddit.frontpage",
+                "tv.twitch.android",
+                "com.pinterest",
+                "com.google.android.youtube"
+        );
+    }
 
     // High-speed volatility RAM cache to hold Deep Linking Portals
     public static final ConcurrentHashMap<Long, PendingIntent> pendingIntentCache = new ConcurrentHashMap<>();
@@ -50,14 +58,22 @@ public class IntentNotificationService extends NotificationListenerService {
     private final LinkedList<CharSequence> bufferInbox = new LinkedList<>();
 
     // Ignore core OS noise but allow EVERYTHING else to be analyzed
-    private static final List<String> IGNORED_PACKAGES = Arrays.asList(
-            "android",
-            "com.android.systemui",
-            "com.android.phone",
-            "com.android.settings",
-            "com.google.android.apps.nexuslauncher", // Pixel Launcher
-            "com.sec.android.app.launcher" // Samsung Launcher
-    );
+    private List<String> getIgnoredPackages() {
+        android.content.SharedPreferences prefs = getApplicationContext().getSharedPreferences("FlutterSharedPreferences", android.content.Context.MODE_PRIVATE);
+        Object raw = prefs.getAll().get("flutter.ignored_packages");
+        if (raw != null) {
+            java.util.List<String> list = com.intent.intent_app.IntentBrain.parseFlutterListSafely(raw);
+            if (!list.isEmpty()) return list;
+        }
+        return Arrays.asList(
+                "android",
+                "com.android.systemui",
+                "com.android.phone",
+                "com.android.settings",
+                "com.google.android.apps.nexuslauncher", // Pixel Launcher
+                "com.sec.android.app.launcher" // Samsung Launcher
+        );
+    }
 
     @Override
     public void onCreate() {
@@ -69,6 +85,32 @@ public class IntentNotificationService extends NotificationListenerService {
         com.intent.intent_app.DriveSafetyEngine.getInstance(this).startBackgroundTracking();
         
         createBufferChannel();
+
+        // Listen for instant keyword updates from Flutter UI
+        android.content.IntentFilter filter = new android.content.IntentFilter("com.intent.intent_app.SYNC_KEYWORDS");
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(keywordSyncReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(keywordSyncReceiver, filter);
+        }
+    }
+
+    private final android.content.BroadcastReceiver keywordSyncReceiver = new android.content.BroadcastReceiver() {
+        @Override
+        public void onReceive(android.content.Context context, android.content.Intent intent) {
+            Log.i(TAG, "Received SYNC_KEYWORDS broadcast. Forcing IntentBrain to reload memory cache.");
+            if (intentBrain != null) {
+                intentBrain.forceReloadKeywords(intent);
+            }
+        }
+    };
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        try {
+            unregisterReceiver(keywordSyncReceiver);
+        } catch (Exception e) {}
     }
 
     private void createBufferChannel() {
@@ -103,7 +145,7 @@ public class IntentNotificationService extends NotificationListenerService {
             String packageName = sbn.getPackageName();
 
             // 1. Filter out system notifications and self-feedback loops
-            if (packageName == null || packageName.equals(getPackageName()) || IGNORED_PACKAGES.contains(packageName) || packageName.startsWith("com.android.providers")) {
+            if (packageName == null || packageName.equals(getPackageName()) || getIgnoredPackages().contains(packageName) || packageName.startsWith("com.android.providers")) {
                 return;
             }
 
@@ -311,7 +353,7 @@ public class IntentNotificationService extends NotificationListenerService {
         if (sbn == null) return;
         
         String packageName = sbn.getPackageName();
-        if (packageName == null || packageName.equals(getPackageName()) || IGNORED_PACKAGES.contains(packageName)) {
+        if (packageName == null || packageName.equals(getPackageName()) || getIgnoredPackages().contains(packageName)) {
             return; // Ignore internal noise
         }
 
@@ -387,20 +429,25 @@ public class IntentNotificationService extends NotificationListenerService {
             }
         }
 
-        // ANTI-OVERFIT interactions tracking
-        int interactions = prefs.getInt(countKey, 0) + 1;
-        prefs.edit().putInt(countKey, interactions).apply();
-
-        if (interactions < 10) {
-            Log.d(TAG, "Adaptive Weights: Gathering baseline for " + contextKey + " (" + interactions + "/10)");
-            return; 
-        }
-
         float currentWeight = prefs.getFloat(contextKey, baseWeight);
         
         // NORMALIZED PER APP
         String appModKey = "app_mod_" + packageName;
         float appModifier = prefs.getFloat(appModKey, 1.0f);
+        
+        // Apply specific per-app adjustments to help isolate spam apps quickly
+        // Learning rate increased to 0.2f so user intent overrides AI in ~2 to 3 actions
+        appModifier = Math.max(0.5f, Math.min(2.0f, appModifier + (score * 0.2f)));
+        prefs.edit().putFloat(appModKey, appModifier).apply();
+        
+        // ANTI-OVERFIT interactions tracking for GLOBAL CONTEXT
+        int interactions = prefs.getInt(countKey, 0) + 1;
+        prefs.edit().putInt(countKey, interactions).apply();
+
+        if (interactions < 10) {
+            Log.d(TAG, "Adaptive Weights: Gathering baseline for " + contextKey + " (" + interactions + "/10). App Modifier updated to " + appModifier);
+            return; 
+        }
         
         // DECREASING LEARNING RATE: Capped Alpha based on interactions up to 100
         float learningDecay = (float)(1.0 / Math.max(1, Math.min(interactions, 100)));
@@ -417,12 +464,8 @@ public class IntentNotificationService extends NotificationListenerService {
             newWeight = Math.max(0.1f, Math.min(newWeight, 4.0f)); 
         }
 
-        // Apply specific per-app adjustments to help isolate spam apps
-        appModifier = Math.max(0.5f, Math.min(2.0f, appModifier + (score * 0.05f)));
-        
         prefs.edit()
             .putFloat(contextKey, newWeight)
-            .putFloat(appModKey, appModifier)
             .apply();
             
         Log.i(TAG, "Adaptive Weights: Constrained Update [" + contextKey + ": " + newWeight + "] [App Mod " + packageName + ": " + appModifier + "]");
@@ -455,28 +498,24 @@ public class IntentNotificationService extends NotificationListenerService {
      * the user is actively distracted on social media.
      */
     private boolean isUserOnSocialMedia() {
-        UsageStatsManager usm = (UsageStatsManager) getSystemService(Context.USAGE_STATS_SERVICE);
+        android.app.usage.UsageStatsManager usm = (android.app.usage.UsageStatsManager) getSystemService(Context.USAGE_STATS_SERVICE);
         if (usm == null) return false;
 
         long endTime = System.currentTimeMillis();
         long startTime = endTime - 1000 * 60; // Look back 60 seconds
-        UsageEvents.Event currentEvent = new UsageEvents.Event();
-        UsageEvents usageEvents = usm.queryEvents(startTime, endTime);
-        String foregroundPackage = null;
+        android.app.usage.UsageEvents.Event currentEvent = new android.app.usage.UsageEvents.Event();
+        android.app.usage.UsageEvents usageEvents = usm.queryEvents(startTime, endTime);
+        String lastResumed = null;
         
         while (usageEvents.hasNextEvent()) {
             usageEvents.getNextEvent(currentEvent);
-            if (currentEvent.getEventType() == UsageEvents.Event.ACTIVITY_RESUMED) {
-                foregroundPackage = currentEvent.getPackageName();
-            } else if (currentEvent.getEventType() == UsageEvents.Event.ACTIVITY_PAUSED) {
-                if (currentEvent.getPackageName().equals(foregroundPackage)) {
-                    foregroundPackage = null;
-                }
+            if (currentEvent.getEventType() == android.app.usage.UsageEvents.Event.ACTIVITY_RESUMED) {
+                lastResumed = currentEvent.getPackageName();
             }
         }
         
-        if (foregroundPackage != null) {
-            return SOCIAL_MEDIA_PACKAGES.contains(foregroundPackage);
+        if (lastResumed != null) {
+            return getSocialMediaPackages().contains(lastResumed);
         }
         return false;
     }

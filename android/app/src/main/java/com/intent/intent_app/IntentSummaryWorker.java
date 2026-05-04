@@ -51,7 +51,7 @@ public class IntentSummaryWorker extends Worker {
         cal.set(Calendar.SECOND, 0);
         long startOfDay = cal.getTimeInMillis();
 
-        if (windowStart == 0 || (now - windowStart) > (24L * 60L * 60L * 1000L)) {
+        if (windowStart == 0 || windowStart < startOfDay) {
             windowStart = startOfDay;
         }
 
@@ -76,7 +76,18 @@ public class IntentSummaryWorker extends Worker {
         }
         textMessage += " and wiped " + spamCount + " Spam alerts.";
 
-        postNotification(context, "Delivery Batch Summary", textMessage);
+        java.util.List<com.intent.intent_app.db.entities.NotificationEntity> bufferedMessages = 
+            dao.getInterceptedBetween(windowStart, now);
+        
+        java.util.ArrayList<String> bufferLines = new java.util.ArrayList<>();
+        for (com.intent.intent_app.db.entities.NotificationEntity msg : bufferedMessages) {
+            if (msg.category == 1) { // Buffer
+                String line = getReadablePackageName(msg.packageName) + ": " + (msg.title != null ? msg.title : "") + " - " + (msg.content != null ? msg.content : "");
+                bufferLines.add(line);
+            }
+        }
+
+        postNotification(context, "Delivery Batch Summary", textMessage, bufferLines);
 
         prefs.edit().putLong("intent_internal.last_summary_run", now).apply();
 
@@ -85,14 +96,16 @@ public class IntentSummaryWorker extends Worker {
 
     private String getReadablePackageName(String packageName) {
         if (packageName == null) return "";
-        String pkg = packageName.toLowerCase();
-        if (pkg.contains("whatsapp")) return "WhatsApp";
-        if (pkg.contains("telegram")) return "Telegram";
-        if (pkg.contains("gm") || pkg.contains("mail")) return "Gmail";
-        if (pkg.contains("messaging") || pkg.contains("mms") || pkg.contains("sms")) return "Messages";
-        if (pkg.contains("instagram")) return "Instagram";
-        if (pkg.contains("discord")) return "Discord";
-        if (pkg.contains("twitter") || pkg.contains("x")) return "X (Twitter)";
+        try {
+            android.content.pm.PackageManager pm = getApplicationContext().getPackageManager();
+            android.content.pm.ApplicationInfo info = pm.getApplicationInfo(packageName, 0);
+            CharSequence label = pm.getApplicationLabel(info);
+            if (label != null) {
+                return label.toString();
+            }
+        } catch (android.content.pm.PackageManager.NameNotFoundException e) {
+            // Ignore and fallback
+        }
         
         // Fallback title-casing
         String[] parts = packageName.split("\\.");
@@ -103,7 +116,7 @@ public class IntentSummaryWorker extends Worker {
         return packageName;
     }
 
-    private void postNotification(Context context, String title, String text) {
+    private void postNotification(Context context, String title, String text, java.util.List<String> messages) {
         NotificationManager manager = context.getSystemService(NotificationManager.class);
         if (manager == null) return;
 
@@ -118,11 +131,24 @@ public class IntentSummaryWorker extends Worker {
             manager.createNotificationChannel(channel);
         }
 
+        NotificationCompat.InboxStyle inboxStyle = new NotificationCompat.InboxStyle();
+        inboxStyle.setBigContentTitle(title);
+        inboxStyle.setSummaryText(text);
+        
+        // Show up to 5 actual buffered messages
+        int limit = Math.min(messages.size(), 5);
+        for (int i = 0; i < limit; i++) {
+            inboxStyle.addLine(messages.get(i));
+        }
+        if (messages.size() > 5) {
+            inboxStyle.addLine("... and " + (messages.size() - 5) + " more.");
+        }
+
         NotificationCompat.Builder builder = new NotificationCompat.Builder(context, channelId)
                 .setSmallIcon(android.R.drawable.sym_def_app_icon)
                 .setContentTitle(title)
                 .setContentText(text)
-                .setStyle(new NotificationCompat.BigTextStyle().bigText(text))
+                .setStyle(inboxStyle)
                 .setAutoCancel(true)
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT);
 
