@@ -72,7 +72,7 @@ The **AI Insight Generation (PDF Report)** inside the Analytics tab is **100% Op
 ## Architecture
 
 <div align="center">
-  <img src="assets/docs/Architecture.png" width="100%" alt="System Architecture">
+  <img src="assets/docs/Architecture.png" width="150%" alt="System Architecture">
 </div>
 
 ---
