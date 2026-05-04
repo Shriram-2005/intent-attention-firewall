@@ -39,9 +39,9 @@ Modern smartphones deliver notifications asynchronously with zero awareness of y
 Intent acts as a real-time cognitive firewall at the OS level. Every incoming notification passes through a three-stage decision pipeline before it ever reaches you:
 
 <div align="center">
-  <img src="assets/docs/Process%20Diagram%20Intent%20Pipeline.png" width="100%" alt="Intent Pipeline">
+  <img src="assets/docs/Process%20Diagram%20Intent%20Pipeline.png" width="75%" alt="Intent Pipeline">
   <br><br>
-  <img src="assets/docs/Process%20Diagram%20How%20it%20Works.png" width="50%" alt="How Intent Works">
+  <img src="assets/docs/Process%20Diagram%20How%20it%20Works.png" width="32%" alt="How Intent Works">
 </div>
 
 ---
