@@ -104,7 +104,7 @@ Because Intent was built on live telemetry rather than emulation, it achieves re
 * **Machine Learning Inference:** The on-device TensorFlow Lite NLP model evaluates notifications in **~150ms during a cold start** and plummets to **<10ms when warmed up**. This microscopic latency allows the engine to intercept, analyze, and quarantine incoming payloads instantaneously — acting far faster than the Android OS can even attempt to wake the OLED screen or trigger the vibration motor.
 
 <div align="center">
-  <img src="assets/analytics_images/Image%201.png" width="100%" alt="Analytics Image 1">
+  <img src="assets/analytics_images/Image%201.png" width="32%" alt="Analytics Image 1">
 </div>
 
 ---
