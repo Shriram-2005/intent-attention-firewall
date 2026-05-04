@@ -12,10 +12,9 @@
 </div>
 <br>
 <div align="center">
-  <img src="assets/docs/Urgent%20Audit%20Log.png" width="24%" />
-  <img src="assets/docs/Generated%20Summary%20Image.png" width="24%" />
-  <img src="assets/docs/Battery%20Report.png" width="24%" />
-  <img src="assets/analytics_images/Image%201.png" width="24%" />
+  <img src="assets/docs/Urgent%20Audit%20Log.png" width="32%" />
+  <img src="assets/docs/Generated%20Summary%20Image.png" width="32%" />
+  <img src="assets/docs/Battery%20Report.png" width="32%" />
 </div>
 <br>
 
@@ -42,7 +41,7 @@ Intent acts as a real-time cognitive firewall at the OS level. Every incoming no
 <div align="center">
   <img src="assets/docs/Process%20Diagram%20Intent%20Pipeline.png" width="100%" alt="Intent Pipeline">
   <br><br>
-  <img src="assets/docs/Process%20Diagram%20How%20it%20Works.png" width="100%" alt="How Intent Works">
+  <img src="assets/docs/Process%20Diagram%20How%20it%20Works.png" width="50%" alt="How Intent Works">
 </div>
 
 ---
@@ -103,6 +102,10 @@ Because Intent was built on live telemetry rather than emulation, it achieves re
 * **The Efficacy Rate:** Live daily logs proved a **~69% reduction** in non-essential interruptions, successfully buffering or silently blocking 84 out of 122 test notifications while achieving 100% delivery for detected urgencies.
 * **The GPS Edge Cases:** Conducted live vehicular telemetry testing to ensure the **> 20 km/h** driving lock engaged purely via precise GPS polling—reliably blocking all non-essential pings without ever stalling VIP emergency bypasses.
 * **Machine Learning Inference:** The on-device TensorFlow Lite NLP model evaluates notifications in **~150ms during a cold start** and plummets to **<10ms when warmed up**. This microscopic latency allows the engine to intercept, analyze, and quarantine incoming payloads instantaneously — acting far faster than the Android OS can even attempt to wake the OLED screen or trigger the vibration motor.
+
+<div align="center">
+  <img src="assets/analytics_images/Image%201.png" width="100%" alt="Analytics Image 1">
+</div>
 
 ---
 
