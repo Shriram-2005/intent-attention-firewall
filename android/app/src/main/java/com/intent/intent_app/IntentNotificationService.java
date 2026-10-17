@@ -687,12 +687,4 @@ public class IntentNotificationService extends NotificationListenerService {
             Log.w(TAG, "Notice: RAM cache maxed out or unstable", e);
         }
     }
-
-    @Override
-    public void onDestroy() {
-        try {
-            dbExecutor.shutdown();
-        } catch (Exception ignored) {}
-        super.onDestroy();
-    }
 }
