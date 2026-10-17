@@ -33,7 +33,18 @@ public class IntentSummaryWorker extends Worker {
         // --- Data Sovereignty Auto-Prune ---
         android.content.SharedPreferences prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE);
         // Default 0 means 'Never auto-delete'
-        long retentionDays = prefs.getLong("flutter.history_retention_days", 0L);
+        long retentionDays = 0L;
+        Object retObj = prefs.getAll().get("flutter.history_retention_days");
+        if (retObj == null) {
+            retObj = prefs.getAll().get("history_retention_days");
+        }
+        if (retObj instanceof Number) {
+            retentionDays = ((Number) retObj).longValue();
+        } else if (retObj instanceof String) {
+            try {
+                retentionDays = Long.parseLong((String) retObj);
+            } catch (Exception ignored) {}
+        }
         if (retentionDays > 0) {
             long thresholdMillis = System.currentTimeMillis() - (retentionDays * 24L * 60L * 60L * 1000L);
             dao.deleteHistoryBefore(thresholdMillis);
@@ -131,24 +142,48 @@ public class IntentSummaryWorker extends Worker {
             manager.createNotificationChannel(channel);
         }
 
-        NotificationCompat.InboxStyle inboxStyle = new NotificationCompat.InboxStyle();
-        inboxStyle.setBigContentTitle(title);
-        inboxStyle.setSummaryText(text);
-        
-        // Show up to 5 actual buffered messages
-        int limit = Math.min(messages.size(), 5);
+        android.content.SharedPreferences prefs = context.getSharedPreferences("FlutterSharedPreferences", android.content.Context.MODE_PRIVATE);
+        Object maxLinesObj = prefs.getAll().get("flutter.buffer_max_lines");
+        int maxBufferLines = 5;
+        if (maxLinesObj instanceof Long) {
+            maxBufferLines = ((Long) maxLinesObj).intValue();
+        } else if (maxLinesObj instanceof Integer) {
+            maxBufferLines = (Integer) maxLinesObj;
+        } else if (maxLinesObj instanceof String) {
+            try {
+                maxBufferLines = Integer.parseInt((String) maxLinesObj);
+            } catch (Exception e) {}
+        }
+
+        StringBuilder sb = new StringBuilder();
+        int limit = Math.min(messages.size(), maxBufferLines);
         for (int i = 0; i < limit; i++) {
-            inboxStyle.addLine(messages.get(i));
+            sb.append(messages.get(i)).append("\n\n");
         }
-        if (messages.size() > 5) {
-            inboxStyle.addLine("... and " + (messages.size() - 5) + " more.");
+        if (messages.size() > limit) {
+            sb.append("... and ").append(messages.size() - limit).append(" more.");
         }
+
+        NotificationCompat.BigTextStyle bigTextStyle = new NotificationCompat.BigTextStyle();
+        bigTextStyle.setBigContentTitle(title);
+        bigTextStyle.setSummaryText(text);
+        bigTextStyle.bigText(sb.toString().trim());
+
+        Intent launchIntent = new Intent(context, MainActivity.class);
+        launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        PendingIntent pendingIntent = PendingIntent.getActivity(
+                context,
+                24680,
+                launchIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
 
         NotificationCompat.Builder builder = new NotificationCompat.Builder(context, channelId)
                 .setSmallIcon(android.R.drawable.sym_def_app_icon)
                 .setContentTitle(title)
                 .setContentText(text)
-                .setStyle(inboxStyle)
+                .setStyle(bigTextStyle)
+                .setContentIntent(pendingIntent)
                 .setAutoCancel(true)
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT);
 

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../features/home/presentation/screens/home_screen.dart';
 import '../../features/analytics/presentation/screens/analytics_screen.dart';
-import '../../features/notifications/presentation/screens/notifications_screen.dart';
 import '../../features/settings/presentation/screens/settings_screen.dart';
 import '../../features/settings/presentation/screens/saved_reports_screen.dart';
 import '../../features/engine/presentation/screens/engine_screen.dart';
@@ -16,7 +15,6 @@ class AppRouter {
 
   static const String home = '/';
   static const String analytics = '/analytics';
-  static const String notifications = '/notifications';
   static const String engine = '/engine';
   static const String settings = '/settings';
   static const String onboarding = '/onboarding';

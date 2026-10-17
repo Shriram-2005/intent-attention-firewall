@@ -51,6 +51,7 @@ Intent acts as a real-time cognitive firewall at the OS level. Every incoming no
 | Feature | Description |
 |---|---|
 | **Hybrid AI Engine** | On-device LSTM (TFLite) + O(1) heuristic fast-path classifies every notification in milliseconds, fully offline |
+| **Smart App Classifications** | Human-readable app mapping (e.g., 'WhatsApp' instead of 'com.whatsapp') with a verified backend database for seamless Distracting & Ignored app categorization |
 | **VIP Contact Bypass** | Named contacts always bypass AI and reach you instantly — Mom's emergency always gets through |
 | **GPS Driving Lockdown** | Detects speed >20 km/h via GPS sensor and auto-locks all non-VIP notifications — safety without isolation |
 | **Adaptive Learning** | Implicit Time-to-Dismiss (TTD) feedback silently personalizes filtering over time via Context-aware EMA |

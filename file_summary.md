@@ -1,0 +1,31 @@
+- **/main.dart**: 59 lines | Status: Clean
+- **\core\router/app_router.dart**: 99 lines | Status: Clean
+- **\core\services/database_service.dart**: 201 lines | Status: Has TODOs
+- **\core\services/local_notification_service.dart**: 57 lines | Status: Clean
+- **\core\state/engine_state.dart**: 23 lines | Status: Clean
+- **\core\theme/app_theme.dart**: 253 lines | Status: Clean
+- **\data\datasources\local/db_channel_service.dart**: 95 lines | Status: Clean
+- **\data\models/app_rule_model.dart**: 22 lines | Status: Clean
+- **\data\models/app_rule_model.freezed.dart**: 303 lines | Status: Clean
+- **\data\models/app_rule_model.g.dart**: 32 lines | Status: Clean
+- **\data\models/notification_model.dart**: 28 lines | Status: Clean
+- **\data\models/notification_model.freezed.dart**: 439 lines | Status: Clean
+- **\data\models/notification_model.g.dart**: 46 lines | Status: Has TODOs
+- **\data\repositories/app_rule_repository.dart**: 37 lines | Status: Clean
+- **\data\repositories/notification_repository.dart**: 53 lines | Status: Clean
+- **\features\analytics\presentation\screens/analytics_screen.dart**: 1282 lines | Status: Has TODOs
+- **\features\engine\presentation\screens/engine_screen.dart**: 175 lines | Status: Clean
+- **\features\home\presentation\screens/home_screen.dart**: 639 lines | Status: Has TODOs
+- **\features\notifications\presentation\screens/notifications_screen.dart**: 28 lines | Status: Clean
+- **\features\onboarding\presentation\screens/onboarding_screen.dart**: 251 lines | Status: Clean
+- **\features\settings\presentation\screens/app_manager_screen.dart**: 407 lines | Status: Clean
+- **\features\settings\presentation\screens/export_screen.dart**: 366 lines | Status: Clean
+- **\features\settings\presentation\screens/history_screen.dart**: 1019 lines | Status: Clean
+- **\features\settings\presentation\screens/saved_reports_screen.dart**: 188 lines | Status: Clean
+- **\features\settings\presentation\screens/settings_screen.dart**: 577 lines | Status: Clean
+- **\features\settings\presentation\screens/support_bottom_sheet.dart**: 446 lines | Status: Clean
+- **\features\settings\presentation\screens/telemetry_screen.dart**: 400 lines | Status: Has TODOs
+- **\features\settings\presentation\screens/training_screen.dart**: 233 lines | Status: Clean
+- **\features\settings\presentation\screens/vip_manager_screen.dart**: 569 lines | Status: Clean
+- **\shared\providers/repository_providers.dart**: 21 lines | Status: Clean
+- **\shared\widgets/main_scaffold.dart**: 167 lines | Status: Clean

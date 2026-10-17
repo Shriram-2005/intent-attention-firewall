@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/services/database_service.dart';
@@ -23,6 +24,11 @@ class _HistoryScreenState extends State<HistoryScreen> with WidgetsBindingObserv
   String? _selectedPackageFilter;
   DateTimeRange? _selectedDateRange;
   bool _isLoading = true;
+  int _offset = 0;
+  static const int _limit = 50;
+  bool _hasMore = true;
+  bool _isLoadingMore = false;
+  final ScrollController _scrollController = ScrollController();
 
   String _getAppName(String? packageName) {
     if (packageName == null) return "System";
@@ -50,7 +56,7 @@ class _HistoryScreenState extends State<HistoryScreen> with WidgetsBindingObserv
       bool categoryMatch = _selectedCategoryFilter == null;
       if (!categoryMatch) {
         if (_selectedCategoryFilter == 3) {
-          final content = ((item['title'] ?? '') + ' ' + (item['text'] ?? '')).toLowerCase();
+          final content = ((item['title'] ?? '') + ' ' + (item['content'] ?? item['text'] ?? '')).toLowerCase();
           categoryMatch = content.contains('otp') || content.contains('code') || 
                           content.contains('verification') || content.contains('password') || 
                           content.contains('security') || content.contains('login') || 
@@ -73,15 +79,23 @@ class _HistoryScreenState extends State<HistoryScreen> with WidgetsBindingObserv
   void initState() {
     super.initState();
     _selectedCategoryFilter = widget.initialCategoryFilter;
-      final now = DateTime.now();
-      _selectedDateRange = DateTimeRange(start: DateTime(now.year, now.month, now.day), end: DateTime(now.year, now.month, now.day));
-WidgetsBinding.instance.addObserver(this);
+    _selectedDateRange = null; // Default to all recent history
+    WidgetsBinding.instance.addObserver(this);
     EngineState.databaseUpdateTick.addListener(_pollHistory);
+    _scrollController.addListener(_onScroll);
     _pollHistory();
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200 && !_isLoadingMore && _hasMore) {
+      _loadMoreHistory();
+    }
   }
 
   @override
   void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
     EngineState.databaseUpdateTick.removeListener(_pollHistory);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
@@ -95,13 +109,22 @@ WidgetsBinding.instance.addObserver(this);
   }
 
   Future<void> _pollHistory() async {
+    _offset = 0;
+    _hasMore = true;
+    setState(() {
+      _isLoading = true;
+    });
+
     List<Map<String, dynamic>> data;
     if (_selectedDateRange == null) {
-      data = await DatabaseService().getHistory();
+      data = await DatabaseService().getHistory(
+        limit: _limit, offset: _offset, category: _selectedCategoryFilter, packageName: _selectedPackageFilter
+      );
     } else {
       data = await DatabaseService().getHistoryBetween(
         _selectedDateRange!.start.millisecondsSinceEpoch,
         _selectedDateRange!.end.add(const Duration(days: 1)).millisecondsSinceEpoch - 1,
+        limit: _limit, offset: _offset, category: _selectedCategoryFilter, packageName: _selectedPackageFilter
       );
     }
 
@@ -110,6 +133,38 @@ WidgetsBinding.instance.addObserver(this);
     setState(() {
       _historyData = data;
       _isLoading = false;
+      if (data.length < _limit) _hasMore = false;
+    });
+  }
+
+  Future<void> _loadMoreHistory() async {
+    if (_isLoadingMore || !_hasMore) return;
+    setState(() {
+      _isLoadingMore = true;
+    });
+    _offset += _limit;
+
+    List<Map<String, dynamic>> data;
+    if (_selectedDateRange == null) {
+      data = await DatabaseService().getHistory(
+        limit: _limit, offset: _offset, category: _selectedCategoryFilter, packageName: _selectedPackageFilter
+      );
+    } else {
+      data = await DatabaseService().getHistoryBetween(
+        _selectedDateRange!.start.millisecondsSinceEpoch,
+        _selectedDateRange!.end.add(const Duration(days: 1)).millisecondsSinceEpoch - 1,
+        limit: _limit, offset: _offset, category: _selectedCategoryFilter, packageName: _selectedPackageFilter
+      );
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      if (data.isEmpty || data.length < _limit) {
+        _hasMore = false;
+      }
+      _historyData.addAll(data);
+      _isLoadingMore = false;
     });
   }
 
@@ -337,37 +392,19 @@ WidgetsBinding.instance.addObserver(this);
                         backgroundColor: Colors.black,
                         onRefresh: _pollHistory,
                         child: ListView.separated(
+                          controller: _scrollController,
                           physics: const AlwaysScrollableScrollPhysics(),
                           padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                          itemCount: _historyData.where((item) {
-                            bool categoryMatch = _selectedCategoryFilter == null;
-                            if (!categoryMatch) {
-                              if (_selectedCategoryFilter == 3) {
-                                final content = ((item['title'] ?? '') + ' ' + (item['text'] ?? '')).toLowerCase();
-                                final RegExp otpRegex = RegExp(r'\b(otp|code|verification|password|security|login|alert|reset)\b');
-                                categoryMatch = otpRegex.hasMatch(content);
-                              } else {
-                                categoryMatch = item['category'] == _selectedCategoryFilter;
-                              }
-                            }
-                            return categoryMatch && (_selectedPackageFilter == null || item['packageName'] == _selectedPackageFilter);
-                          }).length,
+                          itemCount: _historyData.length + (_hasMore ? 1 : 0),
                           separatorBuilder: (context, index) => const Divider(color: Colors.white12, thickness: 1, height: 1),
                           itemBuilder: (context, index) {
-                            final filteredList = _historyData.where((item) {
-                              bool categoryMatch = _selectedCategoryFilter == null;
-                              if (!categoryMatch) {
-                                if (_selectedCategoryFilter == 3) {
-                                  final content = ((item['title'] ?? '') + ' ' + (item['text'] ?? '')).toLowerCase();
-                                  final RegExp otpRegex = RegExp(r'\b(otp|code|verification|password|security|login|alert|reset)\b');
-                                  categoryMatch = otpRegex.hasMatch(content);
-                                } else {
-                                  categoryMatch = item['category'] == _selectedCategoryFilter;
-                                }
-                              }
-                              return categoryMatch && (_selectedPackageFilter == null || item['packageName'] == _selectedPackageFilter);
-                            }).toList();
-                            final item = filteredList[index];
+                            if (index == _historyData.length) {
+                              return const Padding(
+                                padding: EdgeInsets.all(16.0),
+                                child: Center(child: CupertinoActivityIndicator(color: Colors.white54)),
+                              );
+                            }
+                            final item = _historyData[index];
                             final int category = item['category'] ?? 2;
                             
                             Color dotColor;
@@ -471,9 +508,9 @@ WidgetsBinding.instance.addObserver(this);
       onTap: () {
         setState(() {
           _selectedCategoryFilter = categoryIndex;
-          // IMPORTANT: Reset the sub-category package filter whenever category changes
           _selectedPackageFilter = null; 
         });
+        _pollHistory();
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
@@ -511,6 +548,7 @@ WidgetsBinding.instance.addObserver(this);
         setState(() {
           _selectedPackageFilter = packageKey;
         });
+        _pollHistory();
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
@@ -713,6 +751,19 @@ WidgetsBinding.instance.addObserver(this);
                          if (!storedStrList.contains(text.toLowerCase())) {
                             storedStrList.insert(0, text.toLowerCase());
                             await prefs.setStringList(dartKey, storedStrList);
+                            
+                            // SYNC WITH NATIVE ENGINE
+                            try {
+                              const platform = MethodChannel('com.intent.intent_app/settings');
+                              await platform.invokeMethod('settings.syncKeywords', {
+                                'absolute_vip': prefs.getStringList('absolute_vip_keywords') ?? [],
+                                'urgent': prefs.getStringList('urgent_keywords') ?? [],
+                                'buffer': prefs.getStringList('buffer_keywords') ?? [],
+                                'spam': prefs.getStringList('block_keywords') ?? [],
+                              });
+                            } catch (e) {
+                              debugPrint("Failed to sync keywords from history: \$e");
+                            }
                          }
 
                          ScaffoldMessenger.of(context).showSnackBar(

@@ -18,11 +18,17 @@ public interface NotificationDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     void insert(NotificationEntity notification);
 
-    @Query("SELECT * FROM notifications ORDER BY timestamp DESC")
-    List<NotificationEntity> getAllHistory();
+    @Query("SELECT * FROM notifications WHERE (:category IS NULL OR category = :category) AND (:packageName IS NULL OR package_name = :packageName) ORDER BY timestamp DESC LIMIT :limit OFFSET :offset")
+    List<NotificationEntity> getHistoryFiltered(Integer category, String packageName, int limit, int offset);
 
-    @Query("SELECT * FROM notifications WHERE timestamp BETWEEN :start AND :end ORDER BY timestamp DESC")
-    List<NotificationEntity> getHistoryBetween(long start, long end);
+    @Query("SELECT * FROM notifications WHERE timestamp BETWEEN :start AND :end AND (:category IS NULL OR category = :category) AND (:packageName IS NULL OR package_name = :packageName) ORDER BY timestamp DESC LIMIT :limit OFFSET :offset")
+    List<NotificationEntity> getHistoryBetweenFiltered(long start, long end, Integer category, String packageName, int limit, int offset);
+
+    @Query("SELECT * FROM notifications WHERE (LOWER(title) LIKE '%otp%' OR LOWER(title) LIKE '%code%' OR LOWER(title) LIKE '%verification%' OR LOWER(title) LIKE '%password%' OR LOWER(title) LIKE '%security%' OR LOWER(title) LIKE '%login%' OR LOWER(content) LIKE '%otp%' OR LOWER(content) LIKE '%code%' OR LOWER(content) LIKE '%verification%' OR LOWER(content) LIKE '%password%' OR LOWER(content) LIKE '%security%' OR LOWER(content) LIKE '%login%') AND (:packageName IS NULL OR package_name = :packageName) ORDER BY timestamp DESC LIMIT :limit OFFSET :offset")
+    List<NotificationEntity> getOtpHistoryFiltered(String packageName, int limit, int offset);
+
+    @Query("SELECT * FROM notifications WHERE timestamp BETWEEN :start AND :end AND (LOWER(title) LIKE '%otp%' OR LOWER(title) LIKE '%code%' OR LOWER(title) LIKE '%verification%' OR LOWER(title) LIKE '%password%' OR LOWER(title) LIKE '%security%' OR LOWER(title) LIKE '%login%' OR LOWER(content) LIKE '%otp%' OR LOWER(content) LIKE '%code%' OR LOWER(content) LIKE '%verification%' OR LOWER(content) LIKE '%password%' OR LOWER(content) LIKE '%security%' OR LOWER(content) LIKE '%login%') AND (:packageName IS NULL OR package_name = :packageName) ORDER BY timestamp DESC LIMIT :limit OFFSET :offset")
+    List<NotificationEntity> getOtpHistoryBetweenFiltered(long start, long end, String packageName, int limit, int offset);
 
     @Query("DELETE FROM notifications WHERE timestamp < :timestamp")
     void deleteHistoryBefore(long timestamp);
@@ -56,6 +62,6 @@ public interface NotificationDao {
     @Query("SELECT * FROM notifications WHERE timestamp BETWEEN :startTime AND :endTime AND category IN (1, 2) ORDER BY timestamp ASC")
     List<NotificationEntity> getInterceptedBetween(long startTime, long endTime);
 
-    @Query("UPDATE notifications SET feedback_score = :newScore, interaction_time = :ttd WHERE package_name = :packageName AND timestamp > :timestamp")
+    @Query("UPDATE notifications SET feedback_score = :newScore, interaction_time = :ttd WHERE package_name = :packageName AND timestamp BETWEEN (:timestamp - 500) AND (:timestamp + 500)")
     void updateFeedbackScore(String packageName, long timestamp, float newScore, long ttd);
 }

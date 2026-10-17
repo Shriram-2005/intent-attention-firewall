@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 class DatabaseService {
@@ -11,26 +12,35 @@ class DatabaseService {
   final _settingsChannel = const MethodChannel('com.intent.intent_app/settings');
 
   /// Fetches historically stored notifications bypassing legacy features.
-  Future<List<Map<String, dynamic>>> getHistory() async {
+  Future<List<Map<String, dynamic>>> getHistory({int limit = 50, int offset = 0, int? category, String? packageName}) async {
     try {
-      final List<dynamic> result = await _dbChannel.invokeMethod('notifications.getHistory');
+      final List<dynamic> result = await _dbChannel.invokeMethod('notifications.getHistory', {
+        'limit': limit,
+        'offset': offset,
+        if (category != null) 'category': category,
+        if (packageName != null) 'packageName': packageName,
+      });
       return result.map((e) => Map<String, dynamic>.from(e)).toList();
     } catch (e) {
-      print('Failed to get history: $e');
+      debugPrint('Failed to get history: $e');
       return [];
     }
   }
 
   /// Fetches bounded historical notifications for Data Sovereignty filtering.
-  Future<List<Map<String, dynamic>>> getHistoryBetween(int startMillis, int endMillis) async {
+  Future<List<Map<String, dynamic>>> getHistoryBetween(int startMillis, int endMillis, {int limit = 50, int offset = 0, int? category, String? packageName}) async {
     try {
       final List<dynamic> result = await _dbChannel.invokeMethod('notifications.getHistoryBetween', {
         'startTime': startMillis,
         'endTime': endMillis,
+        'limit': limit,
+        'offset': offset,
+        if (category != null) 'category': category,
+        if (packageName != null) 'packageName': packageName,
       });
       return result.map((e) => Map<String, dynamic>.from(e)).toList();
     } catch (e) {
-      print('Failed to get history between bounds: $e');
+      debugPrint('Failed to get history between bounds: $e');
       return [];
     }
   }
@@ -43,7 +53,7 @@ class DatabaseService {
         'endTime': endMillis,
       });
     } catch (e) {
-      print('Failed to delete history: $e');
+      debugPrint('Failed to delete history: $e');
     }
   }
 
@@ -52,7 +62,7 @@ class DatabaseService {
     try {
       await _dbChannel.invokeMethod('notifications.deleteAllHistory');
     } catch (e) {
-      print('Failed to delete all history: $e');
+      debugPrint('Failed to delete all history: $e');
     }
   }
 
@@ -62,7 +72,7 @@ class DatabaseService {
       final String? path = await _dbChannel.invokeMethod('notifications.exportDatabase');
       return path;
     } catch (e) {
-      print('Failed to export DB: $e');
+      debugPrint('Failed to export DB: $e');
       return null;
     }
   }
@@ -78,7 +88,7 @@ class DatabaseService {
       final Map<dynamic, dynamic> result = await _dbChannel.invokeMethod('notifications.getCounts');
       return _parseCounts(result);
     } catch (e) {
-      print('Failed to get counts: $e');
+      debugPrint('Failed to get counts: $e');
       return _emptyCounts();
     }
   }
@@ -92,55 +102,66 @@ class DatabaseService {
       });
       return _parseCounts(result);
     } catch (e) {
-      print('Failed to get counts bounded: $e');
+      debugPrint('Failed to get counts bounded: $e');
       return _emptyCounts();
     }
   }
 
   Map<String, dynamic> _parseCounts(Map<dynamic, dynamic> result) {
-      return {
-        'urgent': result['urgent'] as num? ?? 0,
-        'buffer': result['buffer'] as num? ?? 0,
-        'spam': result['spam'] as num? ?? 0,
-        'latency': result['latency'] as num? ?? 0.0,
-        'literal_mins': result['literal_mins'] as num? ?? 0.0,
-        'cognitive_mins': result['cognitive_mins'] as num? ?? 0.0,
-      };
+    return {
+      'urgent': result['urgent'] as num? ?? 0,
+      'buffer': result['buffer'] as num? ?? 0,
+      'spam': result['spam'] as num? ?? 0,
+      'latency': result['latency'] as num? ?? 0.0,
+      'literal_mins': result['literal_mins'] as num? ?? 0.0,
+      'cognitive_mins': result['cognitive_mins'] as num? ?? 0.0,
+    };
   }
 
   Map<String, dynamic> _emptyCounts() {
-      return {'urgent': 0, 'buffer': 0, 'spam': 0, 'latency': 0.0, 'literal_mins': 0.0, 'cognitive_mins': 0.0};
+    return {'urgent': 0, 'buffer': 0, 'spam': 0, 'latency': 0.0, 'literal_mins': 0.0, 'cognitive_mins': 0.0};
   }
 
-      /// Calculates the day streak of cognitive focus
-    Future<int> getFocusStreak({double requiredMins = 60.0, int daysToCheck = 28}) async {
-      int streak = 0;
-      final now = DateTime.now();
-      for (int i = 0; i < daysToCheck; i++) {
-        final start = now.subtract(Duration(days: i)).copyWith(
-          hour: 0, minute: 0, second: 0, millisecond: 0, microsecond: 0
-        );
-        final end = start.add(const Duration(days: 1)).subtract(const Duration(milliseconds: 1));
-
-        final counts = await getCountsBetween(start.millisecondsSinceEpoch, end.millisecondsSinceEpoch);
-        final mins = (counts['cognitive_mins'] as num?)?.toDouble() ?? 0.0;
-
-        if (mins >= requiredMins) {
-          streak++;
-        } else {
-          if (i == 0) continue; // It's today, keep the streak going since they have the rest of the day
-          break; // Streak broken on a past day
-        }
-      }
-      return streak;
+  /// Calculates the day streak of cognitive focus via single native query pass
+  Future<int> getFocusStreak({double requiredMins = 60.0, int daysToCheck = 28}) async {
+    try {
+      final int? streak = await _dbChannel.invokeMethod<int>('notifications.getFocusStreak', {
+        'requiredMins': requiredMins,
+        'daysToCheck': daysToCheck,
+      });
+      if (streak != null) return streak;
+    } catch (e) {
+      debugPrint('Native streak error, falling back to loop: $e');
     }
+
+    // Fallback if native method fails
+    int streak = 0;
+    final now = DateTime.now();
+    for (int i = 0; i < daysToCheck; i++) {
+      final start = now.subtract(Duration(days: i)).copyWith(
+        hour: 0, minute: 0, second: 0, millisecond: 0, microsecond: 0
+      );
+      final end = start.add(const Duration(days: 1)).subtract(const Duration(milliseconds: 1));
+
+      final counts = await getCountsBetween(start.millisecondsSinceEpoch, end.millisecondsSinceEpoch);
+      final mins = (counts['cognitive_mins'] as num?)?.toDouble() ?? 0.0;
+
+      if (mins >= requiredMins) {
+        streak++;
+      } else {
+        if (i == 0) continue;
+        break;
+      }
+    }
+    return streak;
+  }
 
   /// Extremely fast intent launcher utilizing the pre-established db channel bridge
   Future<void> launchApp(String packageName) async {
     try {
       await _dbChannel.invokeMethod('notifications.launchApp', {'packageName': packageName});
     } catch (e) {
-      print('Failed to launch app $packageName: $e');
+      debugPrint('Failed to launch app $packageName: $e');
     }
   }
 
@@ -149,11 +170,11 @@ class DatabaseService {
     try {
       final success = await _dbChannel.invokeMethod<bool>('notifications.launchMessage', {'timestamp': timestamp});
       if (success != true) {
-        print('Portal expired or OS cancelled... natively falling back to $packageName');
+        debugPrint('Portal expired or OS cancelled... natively falling back to $packageName');
         await launchApp(packageName);
       }
     } catch (e) {
-      print('Failed to launch portal $timestamp: $e');
+      debugPrint('Failed to launch portal $timestamp: $e');
       await launchApp(packageName);
     }
   }
@@ -163,7 +184,7 @@ class DatabaseService {
     try {
       await _settingsChannel.invokeMethod('settings.updateSummaryInterval', {'intervalHours': hours});
     } catch (e) {
-      print('Failed to update summary interval: $e');
+      debugPrint('Failed to update summary interval: $e');
     }
   }
 
@@ -175,7 +196,7 @@ class DatabaseService {
       }
       return result == true;
     } catch (e) {
-      print('Failed to check permissions: $e');
+      debugPrint('Failed to check permissions: $e');
       return false;
     }
   }
@@ -184,7 +205,7 @@ class DatabaseService {
     try {
       await _permissionsChannel.invokeMethod('permissions.request');
     } catch (e) {
-      print('Failed to request permissions: $e');
+      debugPrint('Failed to request permissions: $e');
     }
   }
 
@@ -193,8 +214,7 @@ class DatabaseService {
     try {
       await _settingsChannel.invokeMethod('settings.updateEndOfDay', {'hour': hour, 'minute': minute});
     } catch (e) {
-      print('Failed to update end of day time: $e');
+      debugPrint('Failed to update end of day time: $e');
     }
   }
 }
-

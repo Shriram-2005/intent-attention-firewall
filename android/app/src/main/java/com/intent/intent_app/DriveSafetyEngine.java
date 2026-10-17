@@ -148,7 +148,7 @@ public class DriveSafetyEngine implements LocationListener, SensorEventListener 
             
             android.app.Notification notif = builder
                     .setContentTitle("Driving Mode Enabled")
-                    .setContentText("Do-Or-Die engine active. Only VIP contacts allowed.")
+                    .setContentText("Smart Driving Mode Active. Non-urgent notifications are paused for your safety.")
                     .setSmallIcon(android.R.drawable.ic_dialog_map)
                     .setOngoing(true)
                     .build();

@@ -46,15 +46,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     EngineState.databaseUpdateTick.addListener(_pollData);
-    _loadPreferences();
     _pollData();
-  }
-
-  Future<void> _loadPreferences() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _isAiCoachEnabled = prefs.getBool('isAiCoachEnabled') ?? false;
-    });
   }
 
   Future<void> _toggleAiCoach(bool value) async {
@@ -205,11 +197,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
             'IMPORTANT: Maintain strict privacy. Rely exclusively on these timestamps and categories rather than assuming content. Keep it simple, readable, and formatting-friendly. Absolutely no emojis, robotic greetings, or all-caps paragraphs.';
         
         GenerativeModel model = GenerativeModel(model: 'gemini-2.5-flash', apiKey: apiKey);
-        GenerateContentResponse? response;
-        
-        response = await model.generateContent([Content.text(prompt)]);
-        
-        final aiAnalysis = response?.text ?? 'No insights generated.';
+        final response = await model.generateContent([Content.text(prompt)]);
+        final aiAnalysis = response.text ?? 'No insights generated.';
 
       List<pw.Widget> buildAiInsights(String text) {
         final List<pw.Widget> widgets = [];
@@ -483,7 +472,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
       if (mounted && dialogContext != null) {
         Navigator.pop(dialogContext!);
 
-        print("AI Report Error: $e");
+        debugPrint("AI Report Error: $e");
         final errString = e.toString().toLowerCase();
         String errorMessage = 'An error occurred generating insights.';
         
@@ -527,6 +516,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      if (mounted && _isAiCoachEnabled) {
+        setState(() {
+          _isAiCoachEnabled = false;
+        });
+      }
       _pollData();
     }
   }
@@ -636,294 +630,396 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
     });
   }
 
-  @override
+@override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Scaffold(
+        backgroundColor: Colors.black,
+        body: const Center(child: CircularProgressIndicator(color: Colors.white)),
+      );
+    }
+
     final int totalCount = _urgentCount + _bufferCount + _spamCount;
     final int interceptedTotal = _spamCount + _bufferCount;
+    final double suppressRate = totalCount == 0 ? 0 : (interceptedTotal / totalCount) * 100;
 
     return Scaffold(
-      backgroundColor: AppTheme.surfaceDark,
+      backgroundColor: Colors.black,
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-      floatingActionButton: _isAiCoachEnabled
-          ? FloatingActionButton(
-              onPressed: () async {
-                final now = DateTime.now();
-                final range = await showDateRangePicker(
-                  context: context,
-                  initialDateRange: DateTimeRange(
-                    start: now,
-                    end: now,
-                  ),
-                  firstDate: DateTime(2023),
-                  lastDate: now,
-                  builder: (BuildContext context, Widget? child) {
-                    return Theme(
-                      data: ThemeData.dark().copyWith(
-                        scaffoldBackgroundColor: Colors.black,
-                        colorScheme: const ColorScheme.dark(
-                          primary: Colors.white,
-                          onPrimary: Colors.black,
-                          surface: Colors.black,
-                          onSurface: Colors.white,
-                          secondary: Colors.white,
-                          onSecondary: Colors.black,
-                          secondaryContainer: Colors.white12,
-                          primaryContainer: Colors.white12,
-                          onPrimaryContainer: Colors.white,
-                        ),
-                        dialogBackgroundColor: Colors.black,
-                        appBarTheme: const AppBarTheme(
-                          backgroundColor: Colors.black,
-                          iconTheme: IconThemeData(color: Colors.white),
-                        ),
-                        dividerTheme: const DividerThemeData(color: Colors.white12),
+      floatingActionButton: AnimatedScale(
+        scale: _isAiCoachEnabled ? 1.0 : 0.0,
+        curve: Curves.easeOutBack,
+        duration: const Duration(milliseconds: 300),
+        child: AnimatedOpacity(
+          opacity: _isAiCoachEnabled ? 1.0 : 0.0,
+          duration: const Duration(milliseconds: 200),
+          child: FloatingActionButton(
+            onPressed: _isAiCoachEnabled ? () async {
+              final now = DateTime.now();
+              final range = await showDateRangePicker(
+                context: context,
+                initialDateRange: DateTimeRange(start: now, end: now),
+                firstDate: DateTime(2023),
+                lastDate: now,
+                builder: (context, child) {
+                  return Theme(
+                    data: ThemeData.dark().copyWith(
+                      scaffoldBackgroundColor: Colors.black,
+                      colorScheme: const ColorScheme.dark(
+                        primary: Colors.white,
+                        onPrimary: Colors.black,
+                        surface: Colors.black,
+                        onSurface: Colors.white,
                       ),
-                      child: child!,
-                    );
-                  },
-                );
-                
-                if (range != null) {
-                   // Ensure the end date covers the entire full day until 23:59:59.999
-                   final endInclusive = DateTime(range.end.year, range.end.month, range.end.day, 23, 59, 59, 999);
-                   _generateAiReport(range.start, endInclusive);
-                }
-              },
-              backgroundColor: AppTheme.urgentAccent,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: const Icon(Icons.auto_awesome, color: Colors.white, size: 28),
-            )
-          : null,
+                    ),
+                    child: child!,
+                  );
+                },
+              );
+              
+              if (range != null) {
+                 final endInclusive = DateTime(range.end.year, range.end.month, range.end.day, 23, 59, 59, 999);
+                 _generateAiReport(range.start, endInclusive);
+              }
+            } : null,
+            backgroundColor: AppTheme.urgentAccent,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            child: const Icon(Icons.auto_awesome, color: Colors.white),
+          ),
+        ),
+      ),
       body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(left: 32.0, right: 32.0, top: 32.0),
-              child: _buildHeader(),
-            ),
-            
-            Padding(
-              padding: const EdgeInsets.only(left: 32.0, right: 32.0, top: 16.0, bottom: 8.0),
-              child: Row(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('INSIGHTS', style: GoogleFonts.inter(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w300, letterSpacing: 2)),
+              const SizedBox(height: 32),
+              Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    _isAiCoachEnabled
-                        ? 'AI Coach Enabled'
-                        : 'AI Coach Disabled',
-                    style: GoogleFonts.inter(
-                      color: Colors.white70,
-                      fontSize: 14,
-                    ),
-                  ),
-                  CupertinoSwitch(
+                  Text('AI Coach Enabled', style: GoogleFonts.inter(color: Colors.white70, fontSize: 16)),
+                  Switch(
                     value: _isAiCoachEnabled,
-                    onChanged: _toggleAiCoach,
+                    onChanged: (val) {
+                      _toggleAiCoach(val);
+                    },
+                    activeThumbColor: Colors.white,
                     activeTrackColor: AppTheme.urgentAccent,
+                    inactiveThumbColor: Colors.grey,
+                    inactiveTrackColor: Colors.white24,
                   ),
                 ],
               ),
-            ),
-            Expanded(
-              child: RefreshIndicator(
-                color: Colors.white,
-                backgroundColor: Colors.black,
-                onRefresh: _pollData,
-                child: RawScrollbar(
-                  thumbVisibility: true,
-                  thickness: 4.0,
-                  radius: const Radius.circular(10),
-                  thumbColor: Colors.white.withOpacity(0.5),
-                  mainAxisMargin: 16.0, // Leaves space at the top so it doesn't touch the header
-                  child: ListView(
-                    padding: const EdgeInsets.only(
-                      left: 32.0,
-                      right: 32.0,
-                      top: 16.0,
-                      bottom: 32.0,
-                    ),
-                    physics: const ClampingScrollPhysics(),
+              const SizedBox(height: 48),
+              
+              // Top Big Times
+              GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _showCognitivePrimary = !_showCognitivePrimary;
+                  });
+                },
+                behavior: HitTestBehavior.opaque,
+                child: SizedBox(
+                  height: 190,
+                  width: double.infinity,
+                  child: Stack(
                     children: [
-              SizedBox(
-                height: MediaQuery.of(context).size.height * 0.40,
-                child: Center(
-                  child: _isLoading
-                      ? const CupertinoActivityIndicator(color: Colors.white54)
-                      : _buildDualMetric(_cognitiveMins, _literalMins),
+                      AnimatedAlign(
+                        duration: const Duration(milliseconds: 850),
+                        curve: Curves.easeInOutCubic,
+                        alignment: _showCognitivePrimary ? Alignment.topCenter : Alignment.bottomCenter,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: AnimatedDefaultTextStyle(
+                                duration: const Duration(milliseconds: 850),
+                                curve: Curves.easeInOutCubic,
+                                style: GoogleFonts.inter(
+                                  color: _showCognitivePrimary ? Colors.white : Colors.white70,
+                                  fontSize: _showCognitivePrimary ? 64 : 42,
+                                  fontWeight: FontWeight.w200,
+                                  letterSpacing: 1,
+                                ),
+                                child: Text(_formatTime(_cognitiveMins)),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            AnimatedDefaultTextStyle(
+                              duration: const Duration(milliseconds: 850),
+                              curve: Curves.easeInOutCubic,
+                              style: GoogleFonts.inter(
+                                color: _showCognitivePrimary ? Colors.white54 : Colors.white30,
+                                fontSize: _showCognitivePrimary ? 11 : 10,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 3,
+                              ),
+                              child: const Text('COGNITIVE FOCUS RETAINED'),
+                            ),
+                          ],
+                        ),
+                      ),
+                      AnimatedAlign(
+                        duration: const Duration(milliseconds: 850),
+                        curve: Curves.easeInOutCubic,
+                        alignment: !_showCognitivePrimary ? Alignment.topCenter : Alignment.bottomCenter,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: AnimatedDefaultTextStyle(
+                                duration: const Duration(milliseconds: 850),
+                                curve: Curves.easeInOutCubic,
+                                style: GoogleFonts.inter(
+                                  color: !_showCognitivePrimary ? Colors.white : Colors.white70,
+                                  fontSize: !_showCognitivePrimary ? 64 : 42,
+                                  fontWeight: FontWeight.w200,
+                                  letterSpacing: 1,
+                                ),
+                                child: Text(_formatTime(_literalMins)),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            AnimatedDefaultTextStyle(
+                              duration: const Duration(milliseconds: 850),
+                              curve: Curves.easeInOutCubic,
+                              style: GoogleFonts.inter(
+                                color: !_showCognitivePrimary ? Colors.white54 : Colors.white30,
+                                fontSize: !_showCognitivePrimary ? 11 : 10,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 3,
+                              ),
+                              child: const Text('LITERAL SCREEN TIME AVOIDED'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              _buildBarRow(
-                'URGENT',
-                _urgentCount,
-                totalCount,
-                AppTheme.urgentAccent,
-              ),
+              
+              const SizedBox(height: 64),
+              // Category Progress Bars
+              _buildProgressBar('URGENT', _urgentCount, totalCount, AppTheme.urgentAccent),
+              const SizedBox(height: 24),
+              _buildProgressBar('BUFFER', _bufferCount, totalCount, const Color(0xFF0F80FF)),
+              const SizedBox(height: 24),
+              _buildProgressBar('BLOCKED', _spamCount, totalCount, Colors.white24),
+              
+              const SizedBox(height: 64),
+              Text('REALTIME BENCHMARKS', style: GoogleFonts.inter(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600, letterSpacing: 2)),
+              const SizedBox(height: 24),
+              _buildBenchmarkRow(Icons.shield_outlined, 'Suppressed ${suppressRate.toStringAsFixed(1)}% of total incoming traffic'),
+              const SizedBox(height: 16),
+              _buildBenchmarkRow(Icons.stay_current_portrait, 'Averted $interceptedTotal physical screen engagements'),
+              const SizedBox(height: 16),
+              _buildBenchmarkRow(Icons.speed, 'True Native TFLite executing in ${_latency.toStringAsFixed(2)}ms'),
+              
               const SizedBox(height: 32),
-              _buildBarRow(
-                'BUFFER',
-                _bufferCount,
-                totalCount,
-                AppTheme.bufferAccent,
+              _buildCard(
+                '24HR VOLUME',
+                SizedBox(
+                  height: 140,
+                  child: LineChart(
+                    LineChartData(
+                      gridData: const FlGridData(show: false),
+                      titlesData: FlTitlesData(
+                        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        bottomTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            reservedSize: 22,
+                            interval: 6,
+                            getTitlesWidget: (value, meta) {
+                              String t = '';
+                              if (value == 0) t = '12AM';
+                              if (value == 6) t = '6AM';
+                              if (value == 12) t = '12PM';
+                              if (value == 18) t = '6PM';
+                              if (value == 24) t = '12AM';
+                              return Text(t, style: GoogleFonts.inter(color: Colors.white30, fontSize: 10));
+                            },
+                          ),
+                        ),
+                      ),
+                      borderData: FlBorderData(show: false),
+                      minX: 0,
+                      maxX: 24,
+                      minY: 0,
+                      lineBarsData: [
+                        LineChartBarData(
+                          spots: _temporalData.isEmpty ? [const FlSpot(0,0)] : _temporalData,
+                          isCurved: true,
+                          color: AppTheme.urgentAccent,
+                          barWidth: 3,
+                          isStrokeCapRound: true,
+                          dotData: const FlDotData(show: false),
+                          belowBarData: BarAreaData(
+                            show: true,
+                            gradient: LinearGradient(
+                               colors: [AppTheme.urgentAccent.withOpacity(0.3), Colors.transparent],
+                               begin: Alignment.topCenter,
+                               end: Alignment.bottomCenter,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
-              const SizedBox(height: 32),
-              _buildBarRow(
-                'BLOCKED',
-                _spamCount,
-                totalCount,
-                AppTheme.spamAccent,
+
+              const SizedBox(height: 16),
+              _buildCard(
+                'CONTEXTUAL STATES',
+                SizedBox(
+                  height: 180,
+                  child: RadarChart(
+                    RadarChartData(
+                      dataSets: [
+                        RadarDataSet(
+                          fillColor: const Color(0xFF0F80FF).withOpacity(0.2),
+                          borderColor: const Color(0xFF0F80FF),
+                          entryRadius: 0,
+                          dataEntries: _contextualData.isEmpty ? List.generate(4, (_) => const RadarEntry(value: 0)) : _contextualData,
+                          borderWidth: 2,
+                        ),
+                      ],
+                      radarBackgroundColor: Colors.transparent,
+                      borderData: FlBorderData(show: false),
+                      radarBorderData: const BorderSide(color: Colors.white12, width: 1),
+                      getTitle: (index, angle) {
+                        final titles = ['Focus', 'Drive', 'Night', 'Default'];
+                        return RadarChartTitle(
+                          text: titles[index],
+                          angle: 0,
+                          positionPercentageOffset: 0.1,
+                        );
+                      },
+                      titleTextStyle: GoogleFonts.inter(color: Colors.white54, fontSize: 11),
+                      tickCount: 3,
+                      ticksTextStyle: const TextStyle(color: Colors.transparent),
+                      tickBorderData: const BorderSide(color: Colors.white12, width: 1),
+                      gridBorderData: const BorderSide(color: Colors.white12, width: 1),
+                    ),
+                  ),
+                ),
               ),
-              const SizedBox(height: 48),
-              _buildBenchmarks(totalCount, interceptedTotal),
-              const SizedBox(height: 48),
-              _buildTemporalChart(),
-              _buildContextualChart(),
-              _buildSourceChart(),
-              _buildRoiChart(),
-              const SizedBox(height: 48),
+
+              const SizedBox(height: 16),
+              _buildCard(
+                'TOP INTERRUPTIONS',
+                Row(
+                  children: [
+                    SizedBox(
+                      height: 120,
+                      width: 120,
+                      child: PieChart(
+                        PieChartData(
+                          sectionsSpace: 4,
+                          centerSpaceRadius: 40,
+                          sections: _sourceData.isEmpty
+                            ? [PieChartSectionData(color: Colors.white12, value: 1, showTitle: false)]
+                            : _sourceData,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 32),
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: _sourceLegend.isEmpty 
+                            ? [const Text('No Data', style: TextStyle(color: Colors.white54))] 
+                            : _sourceLegend,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 16),
+              _buildCard(
+                'COGNITIVE ROI (7D)',
+                SizedBox(
+                  height: 140,
+                  child: LineChart(
+                    LineChartData(
+                      gridData: const FlGridData(show: false),
+                      titlesData: FlTitlesData(
+                        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        bottomTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            reservedSize: 22,
+                            getTitlesWidget: (value, meta) {
+                              if (value == 1) return Text('Mon', style: GoogleFonts.inter(color: Colors.white30, fontSize: 10));
+                              if (value == 4) return Text('Thu', style: GoogleFonts.inter(color: Colors.white30, fontSize: 10));
+                              if (value == 7) return Text('Sun', style: GoogleFonts.inter(color: Colors.white30, fontSize: 10));
+                              return const Text('');
+                            },
+                          ),
+                        ),
+                      ),
+                      borderData: FlBorderData(show: false),
+                      minY: 0,
+                      lineBarsData: [
+                        LineChartBarData(
+                          spots: _roiData.isEmpty ? const [FlSpot(1, 0), FlSpot(7, 0)] : _roiData,
+                          isCurved: true, 
+                          color: Colors.white,
+                          barWidth: 3,
+                          isStrokeCapRound: true,
+                          dotData: FlDotData(
+                            show: true,
+                            checkToShowDot: (spot, barData) => _roiData.isNotEmpty && spot.x == _roiData.last.x,
+                            getDotPainter: (spot, percent, barData, index) =>
+                                FlDotCirclePainter(radius: 4, color: AppTheme.urgentAccent, strokeWidth: 0),
+                          ),
+                          belowBarData: BarAreaData(show: false),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 100),
             ],
           ),
-          ),
-        ),
-      ),
-      ],
-      ),
-      ),
-    );
-  }
-
-  Widget _buildHeader() {
-    return Text(
-      'INSIGHTS',
-      style: GoogleFonts.inter(
-        color: AppTheme.textPrimary,
-        fontSize: 32,
-        fontWeight: FontWeight.w300,
-        letterSpacing: 2.0,
-      ),
-    );
-  }
-
-  String _formatTime(double totalMinutes) {
-    if (totalMinutes == 0) return '0s';
-
-    final hours = totalMinutes ~/ 60;
-    final mins = (totalMinutes % 60).floor();
-    final seconds = ((totalMinutes * 60) % 60).round();
-
-    if (hours > 0) {
-      return '${hours}h ${mins}m ${seconds}s';
-    } else if (mins > 0) {
-      return '${mins}m ${seconds}s';
-    } else {
-      return '${seconds}s';
-    }
-  }
-
-  Widget _buildDualMetric(double cognitiveMins, double literalMins) {
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _showCognitivePrimary = !_showCognitivePrimary;
-        });
-      },
-      behavior: HitTestBehavior.opaque,
-      child: SizedBox(
-        height: 220,
-        width: double.infinity,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            _buildAnimatedMetricGroup(
-              value: cognitiveMins,
-              label: 'COGNITIVE FOCUS RETAINED',
-              isPrimary: _showCognitivePrimary,
-            ),
-            _buildAnimatedMetricGroup(
-              value: literalMins,
-              label: 'LITERAL SCREEN TIME AVOIDED',
-              isPrimary: !_showCognitivePrimary,
-            ),
-          ],
         ),
       ),
     );
   }
 
-  Widget _buildAnimatedMetricGroup({
-    required double value,
-    required String label,
-    required bool isPrimary,
-  }) {
-    return AnimatedAlign(
-      duration: const Duration(milliseconds: 700),
-      curve: Curves.fastOutSlowIn,
-      alignment: isPrimary ? Alignment.topCenter : Alignment.bottomCenter,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: AnimatedDefaultTextStyle(
-              duration: const Duration(milliseconds: 700),
-              curve: Curves.fastOutSlowIn,
-              style: GoogleFonts.inter(
-                color: isPrimary ? Colors.white : Colors.white54,
-                fontSize: isPrimary ? 96 : 40,
-                fontWeight: isPrimary ? FontWeight.w100 : FontWeight.w200,
-                letterSpacing: isPrimary ? -2.0 : -1.0,
-                height: 1.0,
-              ),
-              child: Text(_formatTime(value), maxLines: 1),
-            ),
-          ),
-          const SizedBox(height: 12),
-          AnimatedDefaultTextStyle(
-            duration: const Duration(milliseconds: 700),
-            curve: Curves.fastOutSlowIn,
-            style: GoogleFonts.inter(
-              color: isPrimary ? Colors.white54 : Colors.white24,
-              fontSize: isPrimary ? 10 : 8,
-              fontWeight: isPrimary ? FontWeight.w600 : FontWeight.w700,
-              letterSpacing: isPrimary ? 4.0 : 3.0,
-            ),
-            child: Text(label),
-          ),
-        ],
-      ),
-    );
+  String _formatTime(double totalMins) {
+    if (totalMins == 0) return "0m";
+    final h = totalMins ~/ 60;
+    final m = (totalMins % 60).floor();
+    final s = ((totalMins * 60) % 60).floor();
+    if (h > 0) return "${h}h ${m}m ${s}s";
+    return "${m}m ${s}s";
   }
 
-  Widget _buildBarRow(String label, int count, int total, Color color) {
-    final double percentage = total > 0 ? (count / total).clamp(0.0, 1.0) : 0.0;
-
+  Widget _buildProgressBar(String title, int count, int total, Color color) {
+    final flex = total == 0 ? 0.0 : count / total;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              label,
-              style: GoogleFonts.inter(
-                color: Colors.white70,
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                letterSpacing: 2.0,
-              ),
-            ),
-            Text(
-              count.toString().padLeft(2, '0'),
-              style: GoogleFonts.inter(
-                color: color,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 1.0,
-              ),
-            ),
+            Text(title, style: GoogleFonts.inter(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.w600, letterSpacing: 2)),
+            Text('$count', style: GoogleFonts.inter(color: color == Colors.white24 ? Colors.white54 : color, fontSize: 16, fontWeight: FontWeight.bold)),
           ],
         ),
         const SizedBox(height: 12),
@@ -932,55 +1028,18 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
           width: double.infinity,
           decoration: BoxDecoration(
             color: Colors.white10,
-            borderRadius: BorderRadius.circular(100),
+            borderRadius: BorderRadius.circular(6),
           ),
           alignment: Alignment.centerLeft,
           child: FractionallySizedBox(
-            widthFactor: percentage,
+            widthFactor: flex,
             child: Container(
-              height: 12,
               decoration: BoxDecoration(
                 color: color,
-                borderRadius: BorderRadius.circular(100),
+                borderRadius: BorderRadius.circular(6),
               ),
             ),
           ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildBenchmarks(int total, int suppressed) {
-    final double blockedRate = total > 0 ? (suppressed / total) * 100 : 0.0;
-    final int pickupsAvoided = (suppressed * 0.70).round();
-    final double latency = _latency > 0 ? _latency : 3.9;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'REALTIME BENCHMARKS',
-          style: GoogleFonts.inter(
-            color: AppTheme.textPrimary,
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 2.0,
-          ),
-        ),
-        const SizedBox(height: 24),
-        _buildBenchmarkRow(
-          Icons.shield_outlined,
-          'Suppressed ${blockedRate.toStringAsFixed(1)}% of total incoming traffic',
-        ),
-        const SizedBox(height: 16),
-        _buildBenchmarkRow(
-          Icons.smartphone,
-          'Averted $pickupsAvoided physical screen engagements',
-        ),
-        const SizedBox(height: 16),
-        _buildBenchmarkRow(
-          Icons.speed,
-          'True Native TFLite executing in ${latency.toStringAsFixed(2)}ms',
         ),
       ],
     );
@@ -991,291 +1050,43 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
       children: [
         Icon(icon, color: Colors.white54, size: 20),
         const SizedBox(width: 16),
-        Expanded(
-          child: Text(
-            text,
-            style: GoogleFonts.inter(
-              color: Colors.white70,
-              fontSize: 14,
-              fontWeight: FontWeight.w400,
-              height: 1.5,
-            ),
-          ),
-        ),
+        Expanded(child: Text(text, style: GoogleFonts.inter(color: Colors.white70, fontSize: 14))),
       ],
     );
   }
 
-  // ─── CHARTS SECTION ────────────────────────────────────────────────────────
-
-  Widget _chartLabel(String text) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 8.0),
-      child: Text(
-        text,
-        style: GoogleFonts.inter(
-          color: Colors.white38,
-          fontSize: 10,
-          fontWeight: FontWeight.w500,
-        ),
+  Widget _buildCard(String title, Widget child) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: const Color(0xFF141414),
+        borderRadius: BorderRadius.circular(16),
       ),
-    );
-  }
-
-  Widget _buildChartContainer({
-    required String title,
-    required Widget child,
-    double aspectRatio = 1.5,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 32.0),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: const Color(0xFF121212), // Deep grey/black constraint
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: GoogleFonts.inter(
-                color: Colors.white70,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 2.0,
-              ),
-            ),
-            const SizedBox(height: 32),
-            AspectRatio(aspectRatio: aspectRatio, child: child),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTemporalChart() {
-    return _buildChartContainer(
-      title: '24HR VOLUME',
-      child: LineChart(
-        LineChartData(
-          gridData: const FlGridData(show: false),
-          titlesData: FlTitlesData(
-            rightTitles: const AxisTitles(
-              sideTitles: SideTitles(showTitles: false),
-            ),
-            topTitles: const AxisTitles(
-              sideTitles: SideTitles(showTitles: false),
-            ),
-            leftTitles: const AxisTitles(
-              sideTitles: SideTitles(showTitles: false),
-            ),
-            bottomTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                reservedSize: 28,
-                interval: 6,
-                getTitlesWidget: (value, meta) {
-                  switch (value.toInt()) {
-                    case 0:
-                      return _chartLabel('12AM');
-                    case 6:
-                      return _chartLabel('6AM');
-                    case 12:
-                      return _chartLabel('12PM');
-                    case 18:
-                      return _chartLabel('6PM');
-                    case 24:
-                      return _chartLabel('12AM');
-                  }
-                  return const Text('');
-                },
-              ),
-            ),
-          ),
-          borderData: FlBorderData(show: false),
-          lineBarsData: [
-            LineChartBarData(
-              spots: _temporalData.isEmpty ? const [FlSpot(0, 0), FlSpot(24, 0)] : _temporalData,
-              isCurved: true,
-              color: AppTheme.urgentAccent,
-              barWidth: 3,
-              isStrokeCapRound: true,
-              dotData: const FlDotData(show: false),
-              belowBarData: BarAreaData(
-                show: true,
-                gradient: LinearGradient(
-                  colors: [
-                    AppTheme.urgentAccent.withValues(alpha: 0.3),
-                    Colors.transparent,
-                  ],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildContextualChart() {
-    return _buildChartContainer(
-      title: 'CONTEXTUAL STATES',
-      aspectRatio: 1.3,
-      child: RadarChart(
-        RadarChartData(
-          dataSets: [
-            RadarDataSet(
-              fillColor: AppTheme.bufferAccent.withValues(alpha: 0.2),
-              borderColor: AppTheme.bufferAccent,
-              entryRadius: 0,
-              borderWidth: 2,
-              dataEntries: _contextualData.map((e) => e.value == 0 ? const RadarEntry(value: 1) : e).toList(), // Prevent rendering collapse if all zeros
-            ),
-          ],
-          radarBackgroundColor: Colors.transparent,
-          radarBorderData: const BorderSide(color: Colors.white10),
-          titlePositionPercentageOffset: 0.2,
-          tickCount: 3,
-          ticksTextStyle: const TextStyle(color: Colors.transparent),
-          tickBorderData: const BorderSide(color: Colors.transparent),
-          gridBorderData: const BorderSide(color: Colors.white10),
-          getTitle: (index, angle) {
-            switch (index) {
-              case 0:
-                return RadarChartTitle(text: 'Focus');
-              case 1:
-                return RadarChartTitle(text: 'Drive');
-              case 2:
-                return RadarChartTitle(text: 'Night');
-              case 3:
-                return RadarChartTitle(text: 'Default');
-            }
-            return const RadarChartTitle(text: '');
-          },
-          titleTextStyle: GoogleFonts.inter(
-            color: Colors.white70,
-            fontSize: 11,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSourceChart() {
-    return _buildChartContainer(
-      title: 'TOP INTERRUPTIONS',
-      aspectRatio: 1.8,
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            flex: 3,
-            child: PieChart(
-              PieChartData(
-                sectionsSpace: 4,
-                centerSpaceRadius: 45,
-                sections: _sourceData,
-              ),
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            flex: 2,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: _sourceLegend,
-            ),
-          ),
+          Text(title, style: GoogleFonts.inter(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600, letterSpacing: 2)),
+          const SizedBox(height: 32),
+          child,
         ],
       ),
     );
   }
 
-  Widget _buildLegendItem(String label, Color color) {
+  Widget _buildLegendItem(String name, Color color) {
     return Row(
-      mainAxisSize: MainAxisSize.min,
       children: [
-        Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),      
-        ),
+        Container(width: 12, height: 12, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
         const SizedBox(width: 8),
-        Flexible(
+        Expanded(
           child: Text(
-            label,
-            style: GoogleFonts.inter(color: Colors.white70, fontSize: 13),        
+            name, 
+            style: GoogleFonts.inter(color: Colors.white70, fontSize: 12),
             overflow: TextOverflow.ellipsis,
           ),
         ),
       ],
     );
   }
-
-  Widget _buildRoiChart() {
-    return _buildChartContainer(
-      title: 'COGNITIVE ROI (7D)',
-      child: LineChart(
-        LineChartData(
-          gridData: const FlGridData(show: false),
-          titlesData: FlTitlesData(
-            rightTitles: const AxisTitles(
-              sideTitles: SideTitles(showTitles: false),
-            ),
-            topTitles: const AxisTitles(
-              sideTitles: SideTitles(showTitles: false),
-            ),
-            leftTitles: const AxisTitles(
-              sideTitles: SideTitles(showTitles: false),
-            ),
-            bottomTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                reservedSize: 28,
-                getTitlesWidget: (value, meta) {
-                  if (value == 1) return _chartLabel('Mon');
-                  if (value == 4) return _chartLabel('Thu');
-                  if (value == 7) return _chartLabel('Sun');
-                  return const Text('');
-                },
-              ),
-            ),
-          ),
-          borderData: FlBorderData(show: false),
-          minY: 0,
-          lineBarsData: [
-            LineChartBarData(
-              spots: _roiData.isEmpty ? const [FlSpot(1, 0), FlSpot(7, 0)] : _roiData,
-              isCurved: false,
-              color: Colors.white,
-              barWidth: 4,
-              isStrokeCapRound: true,
-              dotData: FlDotData(
-                show: true,
-                checkToShowDot: (spot, barData) => spot.x == 7,
-                getDotPainter: (spot, percent, barData, index) =>
-                    FlDotCirclePainter(
-                      radius: 5,
-                      color: AppTheme.urgentAccent,
-                      strokeWidth: 2,
-                      strokeColor: Colors.black,
-                    ),
-              ),
-              belowBarData: BarAreaData(show: false),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  }
-
-
-
-
+}

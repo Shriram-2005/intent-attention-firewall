@@ -16,7 +16,6 @@ class _SupportBottomSheetState extends State<SupportBottomSheet> {
   late StreamSubscription<List<PurchaseDetails>> _subscription;
   List<ProductDetails> _products = [];
   bool _isAvailable = false;
-  bool _isLoading = true;
 
   final Map<String, Map<String, dynamic>> _productMeta = {
     'support_small': {
@@ -56,20 +55,18 @@ class _SupportBottomSheetState extends State<SupportBottomSheet> {
       if (mounted) {
         setState(() {
           _isAvailable = false;
-          _isLoading = false;
         });
       }
       return;
     }
 
-    const Set<String> _kIds = <String>{'support_small', 'support_medium', 'support_large'};
-    final ProductDetailsResponse productDetailResponse = await _inAppPurchase.queryProductDetails(_kIds);
+    const Set<String> kIds = <String>{'support_small', 'support_medium', 'support_large'};
+    final ProductDetailsResponse productDetailResponse = await _inAppPurchase.queryProductDetails(kIds);
 
     if (mounted) {
       setState(() {
         _isAvailable = true;
         _products = productDetailResponse.productDetails;
-        _isLoading = false;
       });
     }
   }
@@ -178,7 +175,13 @@ class _SupportBottomSheetState extends State<SupportBottomSheet> {
       );
       return;
     }
-    final ProductDetails? product = _products.where((p) => p.id == id).firstOrNull;
+    ProductDetails? product;
+    for (var p in _products) {
+      if (p.id == id) {
+        product = p;
+        break;
+      }
+    }
     if (product != null) {
       final PurchaseParam purchaseParam = PurchaseParam(productDetails: product);
       _inAppPurchase.buyConsumable(purchaseParam: purchaseParam, autoConsume: true);
@@ -287,7 +290,7 @@ class _SupportBottomSheetState extends State<SupportBottomSheet> {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: Colors.orangeAccent.withOpacity(0.1),
+              color: Colors.orangeAccent.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
             child: const Icon(Icons.edit_note, color: Colors.orangeAccent, size: 22),

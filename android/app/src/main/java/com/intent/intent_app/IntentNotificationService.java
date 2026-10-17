@@ -56,24 +56,29 @@ public class IntentNotificationService extends NotificationListenerService {
     public static final ConcurrentHashMap<Long, PendingIntent> pendingIntentCache = new ConcurrentHashMap<>();
     private static final int MAX_CACHE_SIZE = 500;
     private final LinkedList<CharSequence> bufferInbox = new LinkedList<>();
+    private final java.util.concurrent.ExecutorService dbExecutor = java.util.concurrent.Executors.newSingleThreadExecutor();
 
     // Ignore core OS noise but allow EVERYTHING else to be analyzed
     private List<String> getIgnoredPackages() {
         android.content.SharedPreferences prefs = getApplicationContext().getSharedPreferences("FlutterSharedPreferences", android.content.Context.MODE_PRIVATE);
-        Object raw = prefs.getAll().get("flutter.ignored_packages");
-        if (raw != null) {
-            java.util.List<String> list = com.intent.intent_app.IntentBrain.parseFlutterListSafely(raw);
-            if (!list.isEmpty()) return list;
-        }
-        return Arrays.asList(
-                "android",
-                "com.android.systemui",
-                "com.android.phone",
-                "com.android.settings",
-                "com.google.android.apps.nexuslauncher", // Pixel Launcher
-                "com.sec.android.app.launcher" // Samsung Launcher
-        );
+        return IntentBrain.parseFlutterListSafely(prefs.getString("flutter.ignored_packages", "[]"));
     }
+
+    private String getAppLabel(String packageName) {
+        if (packageName == null) return "";
+        try {
+            android.content.pm.PackageManager pm = getApplicationContext().getPackageManager();
+            android.content.pm.ApplicationInfo info = pm.getApplicationInfo(packageName, 0);
+            CharSequence label = pm.getApplicationLabel(info);
+            if (label != null) {
+                return label.toString().toLowerCase().trim();
+            }
+        } catch (android.content.pm.PackageManager.NameNotFoundException e) {
+            // Ignore
+        }
+        return "";
+    }
+
 
     @Override
     public void onCreate() {
@@ -111,6 +116,9 @@ public class IntentNotificationService extends NotificationListenerService {
         try {
             unregisterReceiver(keywordSyncReceiver);
         } catch (Exception e) {}
+        try {
+            dbExecutor.shutdown();
+        } catch (Exception e) {}
     }
 
     private void createBufferChannel() {
@@ -143,9 +151,11 @@ public class IntentNotificationService extends NotificationListenerService {
             }
 
             String packageName = sbn.getPackageName();
+            String appLabel = getAppLabel(packageName);
 
             // 1. Filter out system notifications and self-feedback loops
-            if (packageName == null || packageName.equals(getPackageName()) || getIgnoredPackages().contains(packageName) || packageName.startsWith("com.android.providers")) {
+            List<String> ignored = getIgnoredPackages();
+            if (packageName == null || packageName.equals(getPackageName()) || ignored.contains(packageName) || (!appLabel.isEmpty() && ignored.contains(appLabel)) || packageName.startsWith("com.android.providers")) {
                 return;
             }
 
@@ -198,17 +208,21 @@ public class IntentNotificationService extends NotificationListenerService {
                 return; // Nothing to process
             }
 
-            // Deduplicate exact content within 3000ms
+            // Deduplicate exact content within 20000ms (20 seconds) for heavy network bursting
             String exactSignature = packageName + "|||" + title + "|||" + text;
             Long lastProcessed = duplicateCache.get(exactSignature);
-            if (lastProcessed != null && (interceptTimestamp - lastProcessed) < 3000) {
+            if (lastProcessed != null && (interceptTimestamp - lastProcessed) < 20000) {
                 return; // Ignore exact duplicate broadcast by the OS
             }
             duplicateCache.put(exactSignature, interceptTimestamp);
             
             // Periodically clean up duplicateCache to avoid memory leaks
-            if (duplicateCache.size() > 200) {
-                duplicateCache.clear();
+            if (duplicateCache.size() > 1000) {
+                long now = System.currentTimeMillis();
+                duplicateCache.entrySet().removeIf(entry -> (now - entry.getValue()) > 60000);
+                if (duplicateCache.size() > 4000) {
+                    duplicateCache.clear();
+                }
             }
 
 
@@ -353,7 +367,9 @@ public class IntentNotificationService extends NotificationListenerService {
         if (sbn == null) return;
         
         String packageName = sbn.getPackageName();
-        if (packageName == null || packageName.equals(getPackageName()) || getIgnoredPackages().contains(packageName)) {
+        String appLabel = getAppLabel(packageName);
+        List<String> ignored = getIgnoredPackages();
+        if (packageName == null || packageName.equals(getPackageName()) || ignored.contains(packageName) || (!appLabel.isEmpty() && ignored.contains(appLabel))) {
             return; // Ignore internal noise
         }
 
@@ -384,7 +400,7 @@ public class IntentNotificationService extends NotificationListenerService {
         // LOG FEEDBACK: Store the result and process ARRIVAL CONTEXT
         if (score != 0.0f) {
             final float finalScore = score;
-            java.util.concurrent.Executors.newSingleThreadExecutor().execute(() -> {
+            dbExecutor.execute(() -> {
                 if (com.intent.intent_app.db.IntentDatabase.isLockedForRestore) {
                     Log.w(TAG, "DB Locked for restore. Skipping feedback score update.");
                     return;
@@ -392,7 +408,7 @@ public class IntentNotificationService extends NotificationListenerService {
                 // Determine context explicitly dynamically or use original context multiplier if needed
                 // For now we persist the explicit TTD to the local DB immediately
                 com.intent.intent_app.db.IntentDatabase.getInstance(this)
-                    .notificationDao().updateFeedbackScore(packageName, interceptTimestamp - 5000, finalScore, ttd);
+                    .notificationDao().updateFeedbackScore(packageName, interceptTimestamp, finalScore, ttd);
                 
                 // Fetch the context multiplier the system assigned AT ARRIVAL (Not the current state)
                 // This ensures we only penalize driving rules if the user bypassed during driving
@@ -476,7 +492,7 @@ public class IntentNotificationService extends NotificationListenerService {
      * Runs on an executor to prevent Room from rejecting main-thread calls
      */
     private void logToDatabase(String packageName, String title, String text, int category, long timestamp, long inferenceLatency, float contextMultiplier) {
-        java.util.concurrent.Executors.newSingleThreadExecutor().execute(() -> {
+        dbExecutor.execute(() -> {
             if (com.intent.intent_app.db.IntentDatabase.isLockedForRestore) {
                 Log.w(TAG, "DB Locked for restore. Skipping notification log.");
                 return;
@@ -515,7 +531,10 @@ public class IntentNotificationService extends NotificationListenerService {
         }
         
         if (lastResumed != null) {
-            return getSocialMediaPackages().contains(lastResumed);
+            List<String> social = getSocialMediaPackages();
+            if (social.contains(lastResumed)) return true;
+            String appLabel = getAppLabel(lastResumed);
+            if (!appLabel.isEmpty() && social.contains(appLabel)) return true;
         }
         return false;
     }
@@ -667,5 +686,13 @@ public class IntentNotificationService extends NotificationListenerService {
         } catch (Exception e) {
             Log.w(TAG, "Notice: RAM cache maxed out or unstable", e);
         }
+    }
+
+    @Override
+    public void onDestroy() {
+        try {
+            dbExecutor.shutdown();
+        } catch (Exception ignored) {}
+        super.onDestroy();
     }
 }

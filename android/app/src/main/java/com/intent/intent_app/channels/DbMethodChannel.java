@@ -67,7 +67,25 @@ public class DbMethodChannel {
     private Object dispatch(@NonNull MethodCall call) throws Exception {
         switch (call.method) {
             case "notifications.getHistory": {
-                List<NotificationEntity> list = dao.getAllHistory();
+                int limit = 50;
+                int offset = 0;
+                Object limitObj = call.argument("limit");
+                Object offsetObj = call.argument("offset");
+                if (limitObj instanceof Number) limit = ((Number) limitObj).intValue();
+                if (offsetObj instanceof Number) offset = ((Number) offsetObj).intValue();
+
+                Integer category = null;
+                Object catObj = call.argument("category");
+                if (catObj instanceof Number) category = ((Number) catObj).intValue();
+
+                String packageName = call.argument("packageName");
+
+                List<NotificationEntity> list;
+                if (category != null && category == 3) {
+                    list = dao.getOtpHistoryFiltered(packageName, limit, offset);
+                } else {
+                    list = dao.getHistoryFiltered(category, packageName, limit, offset);
+                }
                 List<Map<String, Object>> mappedList = new ArrayList<>();
                 for (NotificationEntity n : list) {
                     Map<String, Object> m = new HashMap<>();
@@ -85,10 +103,29 @@ public class DbMethodChannel {
             case "notifications.getHistoryBetween": {
                 Object startObj = call.argument("startTime");
                 Object endObj = call.argument("endTime");
+                
+                int limit = 50;
+                int offset = 0;
+                Object limitObj = call.argument("limit");
+                Object offsetObj = call.argument("offset");
+                if (limitObj instanceof Number) limit = ((Number) limitObj).intValue();
+                if (offsetObj instanceof Number) offset = ((Number) offsetObj).intValue();
+
+                Integer category = null;
+                Object catObj = call.argument("category");
+                if (catObj instanceof Number) category = ((Number) catObj).intValue();
+
+                String packageName = call.argument("packageName");
+
                 if (startObj instanceof Number && endObj instanceof Number) {
                     long start = ((Number) startObj).longValue();
                     long end = ((Number) endObj).longValue();
-                    List<NotificationEntity> list = dao.getHistoryBetween(start, end);
+                    List<NotificationEntity> list;
+                    if (category != null && category == 3) {
+                        list = dao.getOtpHistoryBetweenFiltered(start, end, packageName, limit, offset);
+                    } else {
+                        list = dao.getHistoryBetweenFiltered(start, end, category, packageName, limit, offset);
+                    }
                     List<Map<String, Object>> mappedList = new ArrayList<>();
                     for (NotificationEntity n : list) {
                         Map<String, Object> m = new HashMap<>();
@@ -183,6 +220,48 @@ public class DbMethodChannel {
                 counts.put("cognitive_mins", cognitiveMins);
 
                 return counts;
+            }
+
+            case "notifications.getFocusStreak": {
+                double requiredMins = 60.0;
+                int daysToCheck = 28;
+                Object reqObj = call.argument("requiredMins");
+                Object daysObj = call.argument("daysToCheck");
+                if (reqObj instanceof Number) requiredMins = ((Number) reqObj).doubleValue();
+                if (daysObj instanceof Number) daysToCheck = ((Number) daysObj).intValue();
+
+                int streak = 0;
+                long now = System.currentTimeMillis();
+                Calendar cal = Calendar.getInstance();
+                cal.setTimeInMillis(now);
+                cal.set(Calendar.HOUR_OF_DAY, 0);
+                cal.set(Calendar.MINUTE, 0);
+                cal.set(Calendar.SECOND, 0);
+                cal.set(Calendar.MILLISECOND, 0);
+                long todayMidnight = cal.getTimeInMillis();
+
+                for (int i = 0; i < daysToCheck; i++) {
+                    long dayStart = todayMidnight - (i * 86400000L);
+                    long dayEnd = (i == 0) ? now : (dayStart + 86400000L - 1L);
+
+                    List<NotificationEntity> intercepted = dao.getInterceptedBetween(dayStart, dayEnd);
+                    double cognitiveMins = 0.0;
+                    long lastBurstTimestamp = 0;
+                    for (NotificationEntity n : intercepted) {
+                        if (lastBurstTimestamp == 0 || (n.timestamp - lastBurstTimestamp) > 120000) {
+                            cognitiveMins += (1.5 * n.contextMultiplier);
+                            lastBurstTimestamp = n.timestamp;
+                        }
+                    }
+
+                    if (cognitiveMins >= requiredMins) {
+                        streak++;
+                    } else {
+                        if (i == 0) continue; // Keep today's streak alive while day is in progress
+                        break;
+                    }
+                }
+                return streak;
             }
 
             case "notifications.launchApp": {

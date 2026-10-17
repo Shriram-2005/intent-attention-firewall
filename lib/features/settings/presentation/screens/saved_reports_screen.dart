@@ -169,9 +169,10 @@ class _SavedReportsScreenState extends State<SavedReportsScreen> {
                         ],
                       ),
                       onTap: () async {
+                        final messenger = ScaffoldMessenger.of(context);
                         final result = await OpenFilex.open(report.path);
                         if (result.type != ResultType.done && mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
+                          messenger.showSnackBar(
                             SnackBar(
                               content: Text('Could not open file: ${result.message}'),
                               backgroundColor: AppTheme.urgentAccent,

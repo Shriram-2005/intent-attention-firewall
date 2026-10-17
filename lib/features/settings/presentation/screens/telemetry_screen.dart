@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -22,6 +24,7 @@ class _TelemetryScreenState extends State<TelemetryScreen> {
   bool _hasPermission = false;
   bool _isLoading = true;
   int _threshold = 20;
+  StreamSubscription? _telemetrySubscription;
 
   @override
   void initState() {
@@ -60,29 +63,38 @@ class _TelemetryScreenState extends State<TelemetryScreen> {
   }
 
   void _bindTelemetryStream() {
-    _telemetryChannel.receiveBroadcastStream().listen((data) {
+    _telemetrySubscription = _telemetryChannel.receiveBroadcastStream().listen((data) async {
       if (mounted) {
         try {
-          final Map<String, dynamic> raw = jsonDecode(data.toString());
-          setState(() {
-            if (raw.containsKey('speed')) {
-              _speed = (raw['speed'] as num).toInt();
-            }
-            
-            if (raw.containsKey('heading')) {
-              // Shortest Path Rotational Math to prevent 360 -> 0 snap-backs
-              double newHeading = (raw['heading'] as num).toDouble();
-              double diff = newHeading - (_targetHeading.remainder(360.0));
-              if (diff < -180.0) diff += 360.0;
-              if (diff > 180.0) diff -= 360.0;
-              _targetHeading += diff;
-            }
-          });
+          final String dataStr = data.toString();
+          final Map<String, dynamic> raw = await compute(_parseJson, dataStr);
+          if (mounted) {
+            setState(() {
+              if (raw.containsKey('speed')) {
+                _speed = (raw['speed'] as num).toInt();
+              }
+              
+              if (raw.containsKey('heading')) {
+                // Shortest Path Rotational Math to prevent 360 -> 0 snap-backs
+                double newHeading = (raw['heading'] as num).toDouble();
+                double diff = newHeading - (_targetHeading.remainder(360.0));
+                if (diff < -180.0) diff += 360.0;
+                if (diff > 180.0) diff -= 360.0;
+                _targetHeading += diff;
+              }
+            });
+          }
         } catch (e) {
-          print("Telemetry parse error: $e");
+          debugPrint("Telemetry parse error: $e");
         }
       }
     });
+  }
+
+  @override
+  void dispose() {
+    _telemetrySubscription?.cancel();
+    super.dispose();
   }
 
   @override
@@ -396,4 +408,8 @@ class CompassPainter extends CustomPainter {
   bool shouldRepaint(covariant CompassPainter oldDelegate) {
       return oldDelegate.heading != heading;
   }
+}
+
+Map<String, dynamic> _parseJson(String data) {
+  return jsonDecode(data) as Map<String, dynamic>;
 }

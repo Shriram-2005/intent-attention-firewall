@@ -35,14 +35,14 @@ public class HeuristicDictionary {
         // Massive matrix of ~200+ consumerism, gamification, and spam terms.
         SYSTEM_BLOCKED_KEYWORDS = new HashSet<>(Arrays.asList(
             "promo", "offer", "discount", "sale", "clearance", "off", "voucher", "coupon", 
-            "code", "cashback", "save", "savings", "deal", "deals", "steal", "grab", "hurry", 
+            "cashback", "save", "savings", "deal", "deals", "steal", "grab", "hurry", 
             "limited", "expires", "midnight", "today", "tomorrow", "exclusive", "vip", "early",
             "win", "winner", "won", "prize", "jackpot", "lottery", "draw", "spin", "chance", 
             "claim", "reward", "redeem", "free", "gift", "giveaway", "bonus", "tokens", "coins",
-            "lootbox", "chest", "level", "upgrade", "unlock", "points",
+            "lootbox", "chest", "level", "upgrade", "points",
             "subscribe", "newsletter", "update", "latest", "news", "trending", "viral", 
             "missed", "check", "out", "discover", "explore", "new", "arrival", "arrivals", 
-            "collection", "season", "festive", "special", "event", "join", "now",
+            "collection", "season", "festive", "special", "now",
             "cart", "abandoned", "forgot", "items", "waiting", "back", "stock", "restocked", 
             "buy", "shop", "purchase", "store", "online", "app", "download", "install", "rate", 
             "review", "feedback", "survey", "participate",

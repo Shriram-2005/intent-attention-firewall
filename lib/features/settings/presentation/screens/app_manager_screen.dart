@@ -23,6 +23,19 @@ class _AppManagerScreenState extends State<AppManagerScreen> with SingleTickerPr
   
   static const _settingsChannel = MethodChannel('com.intent.intent_app/settings');
 
+  static const List<String> _verifiedSocialApps = [
+    'Instagram', 'WhatsApp', 'Facebook', 'TikTok', 'Twitter', 'Snapchat', 'Reddit', 
+    'Pinterest', 'YouTube', 'Telegram', 'Discord', 'Messenger', 'Twitch', 'LinkedIn', 
+    'Tinder', 'BeReal', 'Tumblr', 'X', 'Threads', 'WeChat'
+  ];
+
+  static const List<String> _verifiedIgnoredApps = [
+    'Settings', 'Phone', 'Messages', 'Clock', 'Camera', 'Gallery', 'Calculator', 
+    'Calendar', 'Contacts', 'Google', 'Play Store', 'Android System', 'System UI', 
+    'Google Play Services', 'File Manager', 'Maps', 'Keyboard', 'Android Auto', 
+    'Carrier Services', 'Digital Wellbeing'
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -42,28 +55,25 @@ class _AppManagerScreenState extends State<AppManagerScreen> with SingleTickerPr
     try {
       final prefs = await SharedPreferences.getInstance();
       setState(() {
-        _socialMediaPackages = prefs.getStringList('social_media_packages') ?? [
-          "com.instagram.android",
-          "com.zhiliaoapp.musically",
-          "com.twitter.android",
-          "com.facebook.katana",
-          "com.snapchat.android",
-          "com.reddit.frontpage",
-          "tv.twitch.android",
-          "com.pinterest",
-          "com.google.android.youtube"
-        ];
-        _ignoredPackages = prefs.getStringList('ignored_packages') ?? [
-          "android",
-          "com.android.systemui",
-          "com.android.phone",
-          "com.android.settings",
-          "com.google.android.apps.nexuslauncher",
-          "com.sec.android.app.launcher"
-        ];
+        List<String> loadedSocial = prefs.getStringList('social_media_packages') ?? [];
+        List<String> loadedIgnored = prefs.getStringList('ignored_packages') ?? [];
+
+        // Migration: Erase old com.x.x.x strings from previous builds
+        loadedSocial.removeWhere((app) => app.contains('.'));
+        loadedIgnored.removeWhere((app) => app.contains('.'));
+
+        if (loadedSocial.isEmpty) {
+          loadedSocial = ["instagram", "whatsapp"];
+        }
+        if (loadedIgnored.isEmpty) {
+          loadedIgnored = ["system ui", "settings", "phone"];
+        }
+
+        _socialMediaPackages = loadedSocial;
+        _ignoredPackages = loadedIgnored;
       });
     } catch (e) {
-      debugPrint("Error loading packages: $e");
+      debugPrint("Error loading packages: \$e");
     }
   }
 
@@ -125,8 +135,8 @@ class _AppManagerScreenState extends State<AppManagerScreen> with SingleTickerPr
                     items: _socialMediaPackages,
                     controller: _socialController,
                     title: 'Distracting Apps',
-                    subtitle: 'These apps will NOT be blocked if you are actively using them.',
-                    hintText: 'e.g., com.facebook.orca',
+                    subtitle: 'The AI will hold these notifications until delivery, unless you are actively using the app.',
+                    hintText: 'e.g., WhatsApp, Instagram',
                   ),
                   _buildListTab(
                     isSocialTab: false,
@@ -134,7 +144,7 @@ class _AppManagerScreenState extends State<AppManagerScreen> with SingleTickerPr
                     controller: _ignoredController,
                     title: 'Ignored Apps',
                     subtitle: 'These system apps are completely invisible to the AI engine.',
-                    hintText: 'e.g., com.whatsapp',
+                    hintText: 'e.g., Settings, Phone',
                   ),
                 ],
               ),
@@ -147,22 +157,28 @@ class _AppManagerScreenState extends State<AppManagerScreen> with SingleTickerPr
 
   Widget _buildHeader() {
     return Padding(
-      padding: const EdgeInsets.only(left: 16.0, right: 32.0, top: 16.0, bottom: 24.0),
+      padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
       child: Row(
         children: [
-          IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white70, size: 20),
-            onPressed: () => Navigator.pop(context),
-            splashRadius: 24,
+          GestureDetector(
+            onTap: () => Navigator.pop(context),
+            behavior: HitTestBehavior.opaque,
+            child: const Icon(CupertinoIcons.back, color: Colors.white, size: 28),
           ),
-          const SizedBox(width: 8),
-          Text(
-            'APP CLASSIFICATIONS',
-            style: GoogleFonts.inter(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 2.0,
+          const SizedBox(width: 16),
+          Expanded(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'APP CLASSIFICATIONS',
+                style: GoogleFonts.inter(
+                  color: AppTheme.textPrimary,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w300,
+                  letterSpacing: 2.0,
+                ),
+              ),
             ),
           ),
         ],
@@ -171,27 +187,32 @@ class _AppManagerScreenState extends State<AppManagerScreen> with SingleTickerPr
   }
 
   Widget _buildTabBar() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 32.0),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: TabBar(
-        controller: _tabController,
-        indicator: BoxDecoration(
-          color: AppTheme.bufferAccent.withOpacity(0.2),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24.0),
+      child: Container(
+        height: 48,
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.05),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppTheme.bufferAccent, width: 1),
         ),
-        labelColor: AppTheme.bufferAccent,
-        unselectedLabelColor: Colors.white54,
-        labelStyle: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 1.0),
-        unselectedLabelStyle: GoogleFonts.inter(fontWeight: FontWeight.w500, fontSize: 13, letterSpacing: 1.0),
-        tabs: const [
-          Tab(text: 'SOCIAL'),
-          Tab(text: 'IGNORED'),
-        ],
+        child: TabBar(
+          controller: _tabController,
+          indicatorSize: TabBarIndicatorSize.tab,
+          dividerColor: Colors.transparent,
+          indicator: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            color: AppTheme.bufferAccent.withOpacity(0.2),
+            border: Border.all(color: AppTheme.bufferAccent, width: 1),
+          ),
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white54,
+          labelStyle: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 12),
+          unselectedLabelStyle: GoogleFonts.inter(fontWeight: FontWeight.w500, fontSize: 12),
+          tabs: const [
+            Tab(text: 'SOCIAL'),
+            Tab(text: 'IGNORED'),
+          ],
+        ),
       ),
     );
   }
@@ -213,7 +234,7 @@ class _AppManagerScreenState extends State<AppManagerScreen> with SingleTickerPr
           const SizedBox(height: 8),
           Text(subtitle, style: GoogleFonts.inter(color: Colors.white54, fontSize: 13, height: 1.5)),
           const SizedBox(height: 32),
-          _buildInputField(controller, hintText, () => _addKeyword(isSocialTab)),
+          _buildInputField(controller, hintText, () => _addKeyword(isSocialTab), isSocialTab),
           const SizedBox(height: 24),
           Expanded(
             child: items.isEmpty
@@ -255,42 +276,130 @@ class _AppManagerScreenState extends State<AppManagerScreen> with SingleTickerPr
     );
   }
 
-  Widget _buildInputField(TextEditingController controller, String hintText, VoidCallback onSubmitted) {
+  Widget _buildInputField(TextEditingController controller, String hintText, VoidCallback onSubmitted, bool isSocialTab) {
+    final List<String> options = isSocialTab ? _verifiedSocialApps : _verifiedIgnoredApps;
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.black.withOpacity(0.3),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.white12),
       ),
-      child: Row(
-        children: [
-          const SizedBox(width: 16),
-          const Icon(Icons.add, color: Colors.white38, size: 20),
-          const SizedBox(width: 12),
-          Expanded(
-            child: TextField(
-              controller: controller,
-              style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
-              decoration: InputDecoration(
-                hintText: hintText,
-                hintStyle: GoogleFonts.inter(color: Colors.white38, fontSize: 14),
-                border: InputBorder.none,
+      child: Autocomplete<String>(
+        optionsBuilder: (TextEditingValue textEditingValue) {
+          if (textEditingValue.text.isEmpty) {
+            return const Iterable<String>.empty();
+          }
+          return options.where((String option) {
+            return option.toLowerCase().contains(textEditingValue.text.toLowerCase());
+          });
+        },
+        onSelected: (String selection) {
+          controller.text = selection;
+        },
+        fieldViewBuilder: (BuildContext context, TextEditingController fieldTextEditingController, FocusNode fieldFocusNode, VoidCallback onFieldSubmitted) {
+          return Row(
+            children: [
+              const SizedBox(width: 16),
+              Expanded(
+                child: TextField(
+                  controller: fieldTextEditingController,
+                  focusNode: fieldFocusNode,
+                  style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                  decoration: InputDecoration(
+                    hintText: hintText,
+                    hintStyle: GoogleFonts.inter(color: Colors.white38, fontSize: 14),
+                    border: InputBorder.none,
+                  ),
+                  onSubmitted: (String value) {
+                    if (options.any((app) => app.toLowerCase() == value.toLowerCase())) {
+                      controller.text = value;
+                      onSubmitted();
+                      fieldTextEditingController.clear();
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          backgroundColor: Colors.black87,
+                          content: Text(
+                            "This application is currently unsupported. It will be added to the verified classification database in a future update.",
+                            style: GoogleFonts.inter(color: Colors.white),
+                          ),
+                          duration: const Duration(seconds: 4),
+                        ),
+                      );
+                      fieldTextEditingController.clear();
+                    }
+                  },
+                ),
               ),
-              onSubmitted: (_) => onSubmitted(),
-            ),
-          ),
-          GestureDetector(
-            onTap: onSubmitted,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: AppTheme.bufferAccent.withOpacity(0.2),
-                borderRadius: const BorderRadius.only(topRight: Radius.circular(12), bottomRight: Radius.circular(12)),
+              GestureDetector(
+                onTap: () {
+                  final value = fieldTextEditingController.text;
+                  if (options.any((app) => app.toLowerCase() == value.toLowerCase())) {
+                    controller.text = value;
+                    onSubmitted();
+                    fieldTextEditingController.clear();
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        backgroundColor: Colors.black87,
+                        content: Text(
+                          "This application is currently unsupported. It will be added to the verified classification database in a future update.",
+                          style: GoogleFonts.inter(color: Colors.white),
+                        ),
+                        duration: const Duration(seconds: 4),
+                      ),
+                    );
+                    fieldTextEditingController.clear();
+                  }
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: AppTheme.bufferAccent.withOpacity(0.2),
+                    borderRadius: const BorderRadius.only(topRight: Radius.circular(12), bottomRight: Radius.circular(12)),
+                  ),
+                  child: Text('ADD', style: GoogleFonts.inter(color: AppTheme.bufferAccent, fontSize: 12, fontWeight: FontWeight.bold)),
+                ),
               ),
-              child: Text('ADD', style: GoogleFonts.inter(color: AppTheme.bufferAccent, fontSize: 12, fontWeight: FontWeight.bold)),
+            ],
+          );
+        },
+        optionsViewBuilder: (context, onSelected, options) {
+          return Align(
+            alignment: Alignment.topLeft,
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                width: MediaQuery.of(context).size.width - 64,
+                margin: const EdgeInsets.only(top: 8),
+                decoration: BoxDecoration(
+                  color: Colors.grey[900],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white12),
+                ),
+                child: ListView.builder(
+                  padding: EdgeInsets.zero,
+                  shrinkWrap: true,
+                  itemCount: options.length,
+                  itemBuilder: (BuildContext context, int index) {
+                    final String option = options.elementAt(index);
+                    return InkWell(
+                      onTap: () => onSelected(option),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Text(
+                          option,
+                          style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
             ),
-          ),
-        ],
+          );
+        },
       ),
     );
   }

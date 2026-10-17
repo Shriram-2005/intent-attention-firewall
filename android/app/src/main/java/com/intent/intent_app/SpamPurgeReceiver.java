@@ -24,12 +24,15 @@ public class SpamPurgeReceiver extends BroadcastReceiver {
         }
 
         // Silent Delete via Room Database
+        final PendingResult pendingResult = goAsync();
         Executors.newSingleThreadExecutor().execute(() -> {
             try {
                 IntentDatabase.getInstance(context).notificationDao().deleteAllSpam();
                 Log.i(TAG, "Spam successfully annihilated.");
             } catch (Exception e) {
                 Log.e(TAG, "Failed to purge spam DB.", e);
+            } finally {
+                pendingResult.finish();
             }
         });
     }

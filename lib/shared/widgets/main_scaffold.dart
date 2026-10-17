@@ -1,7 +1,6 @@
 import 'package:go_router/go_router.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
-import '../../core/router/app_router.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/state/engine_state.dart';
 
@@ -47,7 +46,7 @@ class MainScaffold extends StatelessWidget {
                 Positioned.fill(
                   child: AbsorbPointer(
                     absorbing: true,
-                    child: Container(color: Colors.black.withOpacity(0.97)),
+                    child: Container(color: Colors.black.withValues(alpha: 0.97)),
                   ),
                 ),
               if (isLocked)

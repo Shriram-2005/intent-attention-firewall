@@ -38,16 +38,27 @@ class MainActivity : FlutterActivity() {
 
         // Ensure Buffer Scheduled Delivery is immediately enqueued on startup
         val prefs = applicationContext.getSharedPreferences("FlutterSharedPreferences", android.content.Context.MODE_PRIVATE)
-        val defaultIntervalObj = prefs.all["flutter.buffer_interval"]
-        val intervalHours = if (defaultIntervalObj is Number) {
-            defaultIntervalObj.toInt()
-        } else if (defaultIntervalObj is String) {
-            defaultIntervalObj.toIntOrNull() ?: 24
+        
+        val minsObj = prefs.all["flutter.buffer_interval_minutes"]
+        val intervalMins = if (minsObj is Number) {
+            minsObj.toLong()
+        } else if (minsObj is String) {
+            minsObj.toLongOrNull()
         } else {
-            24
+            null
+        } ?: run {
+            val oldHoursObj = prefs.all["flutter.buffer_interval"]
+            val oldHours = if (oldHoursObj is Number) {
+                oldHoursObj.toLong()
+            } else if (oldHoursObj is String) {
+                oldHoursObj.toLongOrNull() ?: 24L
+            } else {
+                24L
+            }
+            oldHours * 60L
         }
 
-        val requestBuilder = PeriodicWorkRequestBuilder<IntentSummaryWorker>(intervalHours.toLong(), TimeUnit.HOURS)
+        val requestBuilder = PeriodicWorkRequestBuilder<IntentSummaryWorker>(intervalMins, TimeUnit.MINUTES)
 
         WorkManager.getInstance(applicationContext).enqueueUniquePeriodicWork(
             "IntentSummaryWork",

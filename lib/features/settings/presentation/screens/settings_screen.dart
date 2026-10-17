@@ -23,7 +23,7 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  int _bufferInterval = 24;
+  int _bufferIntervalMins = 1440; // Default 24 hours
   int _historyRetentionDays = 0;
   int _bufferSummaryCount = 5;
 
@@ -36,18 +36,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _bufferInterval = prefs.getInt('buffer_interval') ?? 24;
-      _historyRetentionDays = prefs.getInt('flutter.history_retention_days') ?? 0;
+      int? mins = prefs.getInt('buffer_interval_minutes');
+      if (mins != null) {
+        _bufferIntervalMins = mins;
+      } else {
+        // Fallback migration for old users
+        _bufferIntervalMins = (prefs.getInt('buffer_interval') ?? 24) * 60;
+      }
+      _historyRetentionDays = prefs.getInt('history_retention_days') ?? prefs.getInt('flutter.history_retention_days') ?? 0;
       _bufferSummaryCount = prefs.getInt('buffer_max_lines') ?? 5;
     });
   }
 
-  Future<void> _updateInterval(int hours) async {
+  Future<void> _updateInterval(int mins) async {
     setState(() {
-      _bufferInterval = hours;
+      _bufferIntervalMins = mins;
     });
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt('buffer_interval', hours);
+    await prefs.setInt('buffer_interval_minutes', mins);
+    // Backward compatibility for old DB logic if any:
+    await prefs.setInt('buffer_interval', mins ~/ 60);
+    // Note: Since DatabaseService().updateSummaryInterval() takes hours,
+    // we should update it if the interval is at least 1 hour, otherwise just use 1.
+    // However, it's safer to just pass hours. The real logic runs in Native worker.
+    int hours = (mins >= 60) ? mins ~/ 60 : 1;
     await DatabaseService().updateSummaryInterval(hours);
   }
 
@@ -56,7 +68,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _historyRetentionDays = days;
     });
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt('flutter.history_retention_days', days);
+    await prefs.setInt('history_retention_days', days);
   }
 
   Future<void> _updateBufferCount(int count) async {
@@ -90,12 +102,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
             TextButton(
               onPressed: () async {
                 Navigator.pop(context);
+                final messenger = ScaffoldMessenger.of(context);
                 await DatabaseService().deleteAllHistory();
-                final prefs = await SharedPreferences.getInstance();
                 EngineState.notifyDatabaseUpdated();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('All Data Purged Successfully.', style: GoogleFonts.inter(color: Colors.white)), backgroundColor: Colors.redAccent),
-                );
+                if (mounted) {
+                  messenger.showSnackBar(
+                    SnackBar(content: Text('All Data Purged Successfully.', style: GoogleFonts.inter(color: Colors.white)), backgroundColor: Colors.redAccent),
+                  );
+                }
               },
               child: Text('PURGE EVERYTHING', style: GoogleFonts.inter(color: Colors.redAccent, fontWeight: FontWeight.bold)),
             ),
@@ -167,6 +181,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         subtitle: 'Configure when the background worker fires the evening notification.',
                         onTap: () async {
                           final prefs = await SharedPreferences.getInstance();
+                          if (!mounted) return;
                           final h = prefs.getInt('eod_hour') ?? 21;
                           final m = prefs.getInt('eod_minute') ?? 0;
                           final time = await showTimePicker(
@@ -446,7 +461,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<int>(
-          value: _bufferInterval,
+          value: _bufferIntervalMins,
           dropdownColor: Colors.black87,
           icon: const Icon(CupertinoIcons.chevron_down, color: Colors.white54, size: 16),
           style: GoogleFonts.inter(
@@ -460,11 +475,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
             }
           },
           items: const [
-            DropdownMenuItem(value: 1, child: Text('Micro-Buffer (15 mins)')),
-            DropdownMenuItem(value: 4, child: Text('Every 4 Hours')),
-            DropdownMenuItem(value: 8, child: Text('Every 8 Hours')),
-            DropdownMenuItem(value: 12, child: Text('Twice a Day (12 Hours)')),
-            DropdownMenuItem(value: 24, child: Text('Daily Summary (24 Hours)')),
+            DropdownMenuItem(value: 15, child: Text('Micro-Buffer (15 mins)')),
+            DropdownMenuItem(value: 30, child: Text('Quick Buffer (30 mins)')),
+            DropdownMenuItem(value: 60, child: Text('Hourly (1 Hour)')),
+            DropdownMenuItem(value: 120, child: Text('Every 2 Hours')),
+            DropdownMenuItem(value: 240, child: Text('Every 4 Hours')),
+            DropdownMenuItem(value: 480, child: Text('Every 8 Hours')),
+            DropdownMenuItem(value: 720, child: Text('Twice a Day (12 Hours)')),
+            DropdownMenuItem(value: 1440, child: Text('Daily Summary (24 Hours)')),
           ],
         ),
       ),
@@ -500,6 +518,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             DropdownMenuItem(value: 5, child: Text('5 Messages (Optimal)')),
             DropdownMenuItem(value: 10, child: Text('10 Messages')),
             DropdownMenuItem(value: 15, child: Text('15 Messages')),
+            DropdownMenuItem(value: 20, child: Text('20 Messages')),
           ],
         ),
       ),
