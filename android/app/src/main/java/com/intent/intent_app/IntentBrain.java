@@ -309,106 +309,157 @@ public class IntentBrain {
         return false;
     }
 
+    private static final java.util.concurrent.ConcurrentHashMap<String, java.util.regex.Pattern> sPatternCache = 
+        new java.util.concurrent.ConcurrentHashMap<>();
+
+    static java.util.regex.Pattern getWordPattern(String keyword) {
+        if (keyword == null) return null;
+        String trimmed = keyword.trim().toLowerCase();
+        if (trimmed.isEmpty()) return null;
+        return sPatternCache.computeIfAbsent(trimmed, kw -> 
+            java.util.regex.Pattern.compile("(?i)\\b" + java.util.regex.Pattern.quote(kw) + "\\b")
+        );
+    }
+
     /**
-     * Matches word boundary cleanly so 'ram' doesn't match 'program' or 'grammar'.
+     * Matches whole word boundary cleanly so 'ram' doesn't match 'program' or 'grammar'.
+     * Supports keywords of length 2 and up (e.g. 'hr', 'ai', 'dr', 'ui').
      */
-    private static boolean containsWord(String text, String keyword) {
-        if (text == null || keyword == null || keyword.isEmpty()) return false;
+    static boolean containsWord(String text, String keyword) {
+        if (text == null || keyword == null) return false;
         String trimmed = keyword.trim();
-        if (trimmed.length() <= 2) return false;
-        String regex = "(?i)\\b" + java.util.regex.Pattern.quote(trimmed) + "\\b";
+        if (trimmed.length() < 2) return false;
         try {
-            return java.util.regex.Pattern.compile(regex).matcher(text).find();
+            java.util.regex.Pattern p = getWordPattern(trimmed);
+            return p != null && p.matcher(text).find();
         } catch (Exception e) {
-            return text.toLowerCase().contains(trimmed.toLowerCase());
+            return false;
         }
     }
 
-    // High-confidence regex patterns for mission-critical alerts
-    private static final java.util.regex.Pattern OTP_PATTERN = java.util.regex.Pattern.compile(
-        "(?i)\\b(?:one[- ]?time\\s*(?:pass(?:word)?|code|pin)|otp|verification\\s*code|auth(?:entication)?\\s*code|security\\s*(?:code|alert|pin)|login\\s*code|secret\\s*code|passcode)\\b|" +
-        "(?i)\\b(?:is|code|pin|password)[:\\s]+[0-9]{4,8}\\b|" +
-        "(?i)\\b[0-9]{4,8}\\s+is\\s+(?:your\\s+)?(?:verification|one[- ]?time|security|login|otp)\\b"
+    // High-confidence regex patterns with strict contextual signals
+    // Requires explicit OTP terminology (one-time passcode, verification code, auth pin, etc.)
+    // Does NOT match generic promotional numbers ("use code 2025") or years ("is 2024")
+    private static final java.util.regex.Pattern STRICT_OTP_PATTERN = java.util.regex.Pattern.compile(
+        "(?i)\\b(?:one[- ]?time\\s*(?:pass(?:word|code)?|pin)|otp|verification\\s*(?:code|pin)|auth(?:entication)?\\s*(?:code|pin)|security\\s*(?:code|pin)|login\\s*(?:code|pin)|2fa\\s*code)\\b[:\\s#\\-]*[0-9]{4,8}\\b|" +
+        "(?i)\\b[0-9]{4,8}\\s+(?:is\\s+(?:your\\s+)?)?(?:one[- ]?time\\s*(?:pass(?:word|code)?|pin)|otp|verification\\s*(?:code|pin)|auth(?:entication)?\\s*(?:code|pin)|security\\s*(?:code|pin)|login\\s*(?:code|pin)|2fa\\s*code)\\b|" +
+        "(?i)(?:\\b(?:otp|passcode|verification\\s*code)\\b.*?(?:\\b[0-9]{4,8}\\b).*?\\b(?:do\\s*not\\s*share|don'?t\\s*share|never\\s*share|valid\\s*for)\\b)|" +
+        "(?i)(?:\\b(?:do\\s*not\\s*share|don'?t\\s*share|never\\s*share)\\b.*?(?:\\b[0-9]{4,8}\\b).*?\\b(?:otp|passcode|verification\\s*code)\\b)"
     );
 
-    private static final java.util.regex.Pattern FINANCIAL_PATTERN = java.util.regex.Pattern.compile(
-        "(?i)\\b(?:credited|debited|transferred|withdrawn|charged|txn|transaction|card\\s*ending|acct?\\s*ending|account\\s*ending|bank\\s*alert|payment\\s*of|paid\\s*(?:rs\\.?|inr|\\$|€|£))\\b"
+    // Requires explicit transaction indicators with account/card reference or currency symbol
+    // Does NOT match promotional copy like "save $20" or "book today"
+    private static final java.util.regex.Pattern STRICT_FINANCIAL_PATTERN = java.util.regex.Pattern.compile(
+        "(?i)\\b(?:acct?|account|card)\\s*(?:no\\.?|xx+|[x\\*]{2,}|ending\\s*(?:in|with)?)\\s*[0-9]*\\s*(?:debited|credited|charged|withdrawn)\\b|" +
+        "(?i)\\b(?:debited|credited|withdrawn|charged)\\s+(?:by|for|with)?\\s*(?:rs\\.?|inr|\\$|€|£|usd)\\s*[0-9]+|" +
+        "(?i)\\b(?:paid|transferred)\\s+(?:rs\\.?|inr|\\$|€|£|usd)\\s*[0-9]+(?:\\.[0-9]{1,2})?\\s+(?:to|for|via)\\b|" +
+        "(?i)\\b(?:upi\\s*ref|imps\\s*ref|neft\\s*ref|txn\\s*(?:id|ref))\\s*[:\\s#]*[0-9a-zA-Z]{6,}\\b"
     );
 
-    private static final java.util.regex.Pattern CRITICAL_SERVICE_PATTERN = java.util.regex.Pattern.compile(
-        "(?i)\\b(?:driver\\s*(?:arriving|arrived)|out\\s*for\\s*delivery|package\\s*delivered|courier|doctor|hospital|clinic|prescription|appointment|ambulance|emergency)\\b"
+    // Requires concrete dispatch or medical emergency context (excludes generic words like "doctor", "hospital", "appointment")
+    private static final java.util.regex.Pattern STRICT_CRITICAL_SERVICE_PATTERN = java.util.regex.Pattern.compile(
+        "(?i)\\b(?:driver|courier|rider)\\s+(?:is\\s+)?(?:arriving|arrived|approaching|outside)\\b|" +
+        "(?i)\\b(?:out\\s+for\\s+delivery|package\\s+(?:has\\s+been\\s+)?delivered|shipment\\s+out\\s+for\\s+delivery)\\b|" +
+        "(?i)\\b(?:ambulance\\s+(?:dispatched|en\\s*route|arrived)|emergency\\s+(?:sos|alert|evacuation|warning))\\b|" +
+        "(?i)\\b(?:prescription\\s+(?:is\\s+)?ready\\s+for\\s+pickup|critical\\s+lab\\s+result)\\b"
     );
 
-    private int executeHeuristicMatching(String text, SharedPreferences prefs) {
-        java.util.ArrayList<String> rawAbsoluteVipList = cachedAbsoluteVip != null ? cachedAbsoluteVip : parseFlutterListSafely(prefs.getAll().get("flutter.absolute_vip_keywords"));
-        java.util.ArrayList<String> rawUrgentList = cachedUrgent != null ? cachedUrgent : parseFlutterListSafely(prefs.getAll().get("flutter.urgent_keywords"));
-        java.util.ArrayList<String> rawBufferList = cachedBuffer != null ? cachedBuffer : parseFlutterListSafely(prefs.getAll().get("flutter.buffer_keywords"));
-        java.util.ArrayList<String> rawSpamList = cachedSpam != null ? cachedSpam : parseFlutterListSafely(prefs.getAll().get("flutter.block_keywords"));
+    static boolean isOtp(String text) {
+        if (text == null) return false;
+        return STRICT_OTP_PATTERN.matcher(text).find();
+    }
 
+    static boolean isFinancial(String text) {
+        if (text == null) return false;
+        return STRICT_FINANCIAL_PATTERN.matcher(text).find();
+    }
+
+    static boolean isCriticalService(String text) {
+        if (text == null) return false;
+        return STRICT_CRITICAL_SERVICE_PATTERN.matcher(text).find();
+    }
+
+    /**
+     * Core heuristic evaluation with strict precedence:
+     * 1. Absolute VIP (-2)
+     * 2. User Block/Spam List (2) - User's explicit block takes precedence over generic patterns
+     * 3. User Buffer List (1) - User's explicit buffer rules
+     * 4. User Urgent List (0) - User's explicit urgent rules
+     * 5. High-confidence Mission-Critical Detection (OTP, Financial, Emergency) (0)
+     * 6. System Dictionaries
+     * 7. Fallback (-1)
+     */
+    static int evaluateHeuristics(
+            String text,
+            java.util.List<String> rawAbsoluteVipList,
+            java.util.List<String> rawUrgentList,
+            java.util.List<String> rawBufferList,
+            java.util.List<String> rawSpamList) {
+
+        if (text == null || text.trim().isEmpty()) return -1;
         String rawLowerText = text.toLowerCase();
 
-        // 0. Absolute VIP Check with Word Boundary and Phone Normalization
-        for (String vipContext : rawAbsoluteVipList) {
-            if (vipContext.length() > 2) {
-                if (isPhoneNumber(vipContext)) {
-                    if (matchesPhoneInText(text, vipContext)) {
-                        Log.i(TAG, "Heuristic Matched NUMERIC VIP Contact");
+        // 1. Absolute VIP Check with Word Boundary and Phone Normalization
+        if (rawAbsoluteVipList != null) {
+            for (String vipContext : rawAbsoluteVipList) {
+                if (vipContext.length() >= 2) {
+                    if (isPhoneNumber(vipContext)) {
+                        if (matchesPhoneInText(text, vipContext)) {
+                            return -2; // VIP Strict Bypass
+                        }
+                    } else if (containsWord(text, vipContext)) {
                         return -2; // VIP Strict Bypass
                     }
-                } else if (containsWord(text, vipContext)) {
-                    Log.i(TAG, "Heuristic Matched WORD VIP Contact");
-                    return -2; // VIP Strict Bypass
                 }
             }
         }
 
-        // 0.1 Strict OTP, Financial & Mission-Critical Delivery/Medical Alert Patterns (Zero-Drop)
-        if (OTP_PATTERN.matcher(text).find()) {
-            Log.i(TAG, "Heuristic Matched Pattern: High-Priority OTP / Security Code");
-            return 0; // Urgent
+        // 2. User Explicit Block/Spam Rules - USER PREFERENCE PRECEDENCE
+        // An explicit user block rule (e.g. promo keyword or package) MUST NOT be overridden by generic pattern matches!
+        if (rawSpamList != null) {
+            for (String spamPhrase : rawSpamList) {
+                if (spamPhrase.length() >= 2 && containsWord(text, spamPhrase)) {
+                    return 2; // User Block/Spam
+                }
+            }
         }
 
-        if (FINANCIAL_PATTERN.matcher(text).find()) {
-            Log.i(TAG, "Heuristic Matched Pattern: Critical Financial Transaction");
-            return 0; // Urgent
+        // 3. User Explicit Buffer Rules
+        if (rawBufferList != null) {
+            for (String bufferPhrase : rawBufferList) {
+                if (bufferPhrase.length() >= 2 && containsWord(text, bufferPhrase)) {
+                    return 1; // User Buffer
+                }
+            }
         }
 
-        if (CRITICAL_SERVICE_PATTERN.matcher(text).find()) {
-            Log.i(TAG, "Heuristic Matched Pattern: Delivery / Medical / Emergency Alert");
-            return 0; // Urgent
-        }
-
-        // 0.25 Urgent Keyword Overrides with Word Boundaries
-        for (String urgentContext : rawUrgentList) {
-            if (urgentContext.length() > 2) {
-                if (isPhoneNumber(urgentContext)) {
-                    if (matchesPhoneInText(text, urgentContext)) {
-                        Log.i(TAG, "Heuristic Matched NUMERIC URGENT Context");
-                        return 0; // Urgent
+        // 4. User Explicit Urgent Rules
+        if (rawUrgentList != null) {
+            for (String urgentContext : rawUrgentList) {
+                if (urgentContext.length() >= 2) {
+                    if (isPhoneNumber(urgentContext)) {
+                        if (matchesPhoneInText(text, urgentContext)) {
+                            return 0; // User Urgent
+                        }
+                    } else if (containsWord(text, urgentContext)) {
+                        return 0; // User Urgent
                     }
-                } else if (containsWord(text, urgentContext)) {
-                    Log.i(TAG, "Heuristic Matched WORD URGENT Context");
-                    return 0; // Urgent
                 }
             }
         }
 
-        // 0.5. User Overrides (Spam & Buffer) via Word Boundaries
-        for (String spamPhrase : rawSpamList) {
-            if (spamPhrase.length() > 2 && containsWord(text, spamPhrase)) {
-                Log.i(TAG, "Heuristic Matched USER SPAM Phrase");
-                return 2; // Spam
-            }
+        // 5. System Zero-Drop Protection for verified OTP, Financial transactions & Emergencies
+        if (isOtp(text)) {
+            return 0; // Urgent OTP
+        }
+        if (isFinancial(text)) {
+            return 0; // Urgent Financial Alert
+        }
+        if (isCriticalService(text)) {
+            return 0; // Urgent Delivery / Emergency Dispatch
         }
 
-        for (String bufferPhrase : rawBufferList) {
-            if (bufferPhrase.length() > 2 && containsWord(text, bufferPhrase)) {
-                Log.i(TAG, "Heuristic Matched USER BUFFER Phrase");
-                return 1; // Buffer
-            }
-        }
-
-        // 1. Tokenization for System Dictionaries
+        // 6. Tokenization for System Dictionaries
         String strippedText = rawLowerText.replaceAll("[^a-zA-Z0-9 ]", " ");
         String[] notificationWords = strippedText.split("\\s+");
 
@@ -437,6 +488,15 @@ public class IntentBrain {
         }
 
         return -1; // Forward to ML or default safe Buffer
+    }
+
+    private int executeHeuristicMatching(String text, SharedPreferences prefs) {
+        java.util.ArrayList<String> rawAbsoluteVipList = cachedAbsoluteVip != null ? cachedAbsoluteVip : parseFlutterListSafely(prefs.getAll().get("flutter.absolute_vip_keywords"));
+        java.util.ArrayList<String> rawUrgentList = cachedUrgent != null ? cachedUrgent : parseFlutterListSafely(prefs.getAll().get("flutter.urgent_keywords"));
+        java.util.ArrayList<String> rawBufferList = cachedBuffer != null ? cachedBuffer : parseFlutterListSafely(prefs.getAll().get("flutter.buffer_keywords"));
+        java.util.ArrayList<String> rawSpamList = cachedSpam != null ? cachedSpam : parseFlutterListSafely(prefs.getAll().get("flutter.block_keywords"));
+
+        return evaluateHeuristics(text, rawAbsoluteVipList, rawUrgentList, rawBufferList, rawSpamList);
     }
 }
 

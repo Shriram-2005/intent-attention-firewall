@@ -338,9 +338,8 @@ public class DbMethodChannel {
                     }
                 }
 
-                // Block the IntentNotificationService from touching the database
-                com.intent.intent_app.db.IntentDatabase.isLockedForRestore = true;
-                com.intent.intent_app.db.IntentDatabase.resetInstance();
+                // Block any thread or background service from opening or touching the database
+                com.intent.intent_app.db.IntentDatabase.beginRestore();
                 
                 java.io.File dbPath = context.getDatabasePath("intent_database");
                 java.io.File walPath = context.getDatabasePath("intent_database-wal");
@@ -377,7 +376,7 @@ public class DbMethodChannel {
                     }
                     throw new RuntimeException("DB Import Failed (Rolled Back): " + e.getMessage(), e);
                 } finally {
-                    com.intent.intent_app.db.IntentDatabase.isLockedForRestore = false;
+                    com.intent.intent_app.db.IntentDatabase.endRestore();
                 }
             }
 

@@ -65,11 +65,7 @@ android {
             isDebuggable = true
         }
         release {
-            if (keystorePropertiesFile.exists() && keystoreProperties.containsKey("storeFile")) {
-                signingConfig = signingConfigs.getByName("release")
-            } else {
-                signingConfig = signingConfigs.getByName("debug")
-            }
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
             isShrinkResources = false
         }

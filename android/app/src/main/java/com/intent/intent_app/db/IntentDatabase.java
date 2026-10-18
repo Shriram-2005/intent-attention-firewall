@@ -63,29 +63,61 @@ public abstract class IntentDatabase extends RoomDatabase {
         }
     };
 
+    public static final Object RESTORE_LOCK = new Object();
+    public static volatile boolean isLockedForRestore = false;
+
     public static IntentDatabase getInstance(Context context) {
-        if (INSTANCE == null) {
-            synchronized (IntentDatabase.class) {
-                if (INSTANCE == null) {
-                    INSTANCE = Room.databaseBuilder(
-                            context.getApplicationContext(),
-                            IntentDatabase.class,
-                            DB_NAME
-                    )
-                    .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
-                    .fallbackToDestructiveMigrationFrom(1) // Only destructively wipe the obsolete V1 schema
-                    .fallbackToDestructiveMigrationOnDowngrade()
-                    .build();
+        synchronized (RESTORE_LOCK) {
+            while (isLockedForRestore) {
+                try {
+                    RESTORE_LOCK.wait(100);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
                 }
             }
+            if (INSTANCE == null) {
+                INSTANCE = Room.databaseBuilder(
+                        context.getApplicationContext(),
+                        IntentDatabase.class,
+                        DB_NAME
+                )
+                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+                .fallbackToDestructiveMigrationFrom(1) // Only destructively wipe the obsolete V1 schema
+                .fallbackToDestructiveMigrationOnDowngrade()
+                .build();
+            }
+            return INSTANCE;
         }
-        return INSTANCE;
+    }
+
+    public static void beginRestore() {
+        synchronized (RESTORE_LOCK) {
+            isLockedForRestore = true;
+            if (INSTANCE != null) {
+                try {
+                    INSTANCE.close();
+                } catch (Exception ignored) {}
+                INSTANCE = null;
+            }
+        }
+    }
+
+    public static void endRestore() {
+        synchronized (RESTORE_LOCK) {
+            isLockedForRestore = false;
+            RESTORE_LOCK.notifyAll();
+        }
     }
 
     public static void resetInstance() {
-        if (INSTANCE != null) {
-            INSTANCE.close();
-            INSTANCE = null;
+        synchronized (RESTORE_LOCK) {
+            if (INSTANCE != null) {
+                try {
+                    INSTANCE.close();
+                } catch (Exception ignored) {}
+                INSTANCE = null;
+            }
         }
     }
 }

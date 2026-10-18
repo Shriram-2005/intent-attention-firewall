@@ -522,11 +522,15 @@ public class IntentNotificationService extends NotificationListenerService {
 
     private boolean isUserOnSocialMediaThrottled() {
         long now = System.currentTimeMillis();
-        if (now - lastSocialCheckTime < 2000) {
-            return cachedSocialDistraction;
+        if (now - lastSocialCheckTime > 5000) {
+            lastSocialCheckTime = now;
+            // Offload to background executor so listener callback thread NEVER stalls on UsageStats IPC
+            dbExecutor.execute(() -> {
+                try {
+                    cachedSocialDistraction = isUserOnSocialMedia();
+                } catch (Exception ignored) {}
+            });
         }
-        lastSocialCheckTime = now;
-        cachedSocialDistraction = isUserOnSocialMedia();
         return cachedSocialDistraction;
     }
 
