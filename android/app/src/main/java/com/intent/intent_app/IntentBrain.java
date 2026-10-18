@@ -381,9 +381,9 @@ public class IntentBrain {
     private static final java.util.regex.Pattern STRICT_PROMOTIONAL_PATTERN = java.util.regex.Pattern.compile(
         "(?i)\\b(?:[0-9]{1,2}%\\s*(?:off|discount|cashback)|flat\\s+[0-9]+%|save\\s+(?:up\\s+to\\s+)?[0-9]+%)\\b|" +
         "(?i)\\b(?:flash|mega|clearance|holiday|festive|annual|season|black\\s+friday|cyber\\s+monday|end[- ]of[- ]season)\\s+(?:sale|deals?|offers?)\\b|" +
-        "(?i)\\b(?:use|apply|with)?\\s*(?:promo|coupon|discount)?\\s*code[:\\s]+[a-zA-Z0-9_\\-]{3,15}\\b|" +
-        "(?i)\\b(?:shop|order|book|buy)\\s+(?:today|now)?.*?(?:save|discount|[0-9]+%)\\b|" +
-        "(?i)\\b(?:membership|subscription)\\b.*?(?:renewed|expir(?:ed|ing)|renewal|cancelled|upgrade)\\b|" +
+        "(?i)\\b(?:(?:use|apply|with)\\s+(?:promo|coupon|discount)?\\s*code|(?:promo|coupon|discount)\\s*code)[:\\s]+[a-zA-Z0-9_\\-]{3,15}\\b|" +
+        "(?i)\\b(?:shop|order|book|buy)\\s+(?:(?:your|a|an)\\s+[a-zA-Z]+\\s+)?(?:today|now)\\s+(?:and|to)?\\s*(?:save|get\\s+[0-9]+%|discount)\\b|" +
+        "(?i)\\b(?:your\\s+)?(?:membership|subscription)(?:\\s+[a-zA-Z0-9]+){0,4}\\s+(?:renewed|expir(?:ed|ing)|renewal|cancelled|upgrade)\\b|" +
         "(?i)\\b(?:limited[- ]time|exclusive|special)\\s+(?:offer|deal|discount)\\b|" +
         "(?i)\\b(?:buy\\s+[0-9]+\\s+get\\s+[0-9]+\\s+free|free\\s+(?:shipping|delivery)\\s+on\\s+orders)\\b"
     );
@@ -412,22 +412,23 @@ public class IntentBrain {
         return STRICT_PROMOTIONAL_PATTERN.matcher(text).find();
     }
 
+    private static final java.util.regex.Pattern FAMILY_SENDER_PATTERN = java.util.regex.Pattern.compile(
+        "(?i)(?:^|[\\.\\:\\-]\\s*)\\b(?:mom|dad|mother|father|wife|husband|son|daughter|brother|sister)\\b\\s*[\\.\\:\\-]"
+    );
+
     /**
-     * Identifies immediate family senders deliberately (e.g. "Mom: did you eat?", "Dad: are you back home?").
+     * Identifies immediate family senders deliberately in both raw format ("Mom: did you eat?")
+     * and production service format ("WhatsApp. Mom. did you eat?").
      * Deliberate product decision ensuring family communication is treated as Urgent (0)
      * without falsely triggering on promotional copy mentioning "mom" or "sister" in body text.
      */
     static boolean isFamilySender(String text) {
         if (text == null || text.trim().isEmpty()) return false;
-        String lower = text.toLowerCase().trim();
-        for (String relation : FAMILY_RELATIONS) {
-            if (lower.startsWith(relation + ":") || lower.startsWith(relation + " :") ||
-                lower.startsWith(relation + " -") || lower.startsWith(relation + " –") ||
-                lower.equals(relation)) {
-                return true;
-            }
+        String trimmed = text.trim();
+        for (String r : FAMILY_RELATIONS) {
+            if (trimmed.equalsIgnoreCase(r)) return true;
         }
-        return false;
+        return FAMILY_SENDER_PATTERN.matcher(trimmed).find();
     }
 
     /**

@@ -248,23 +248,30 @@ public class IntentNotificationService extends NotificationListenerService {
                 return;
             }
 
-            // 1. User's Explicit Block / Spam List MUST BE HONORED
-            // Saved contacts must NEVER override the user's explicit block list!
-            if (classification == 2) {
-                cancelNotification(sbn.getKey());
-                Log.i(TAG, "USER BLOCKED (Spam) -> Wiping notification from " + packageName);
-                if (!isGroupSummary) {
-                    logToDatabase(packageName, title, text, 2, interceptTimestamp, inferenceLatency, 1.0f);
-                }
-                return;
-            }
-
-            // 2. Direct Peer-to-Peer Message Detection (WhatsApp, SMS, Telegram, Signal, DMs)
+            // 1. Direct Peer-to-Peer Message Detection (WhatsApp, SMS, Telegram, Signal, DMs)
             boolean isDirectMessage = Notification.CATEGORY_MESSAGE.equals(notification.category) ||
                                       Notification.CATEGORY_CALL.equals(notification.category) ||
                                       extras.containsKey(Notification.EXTRA_MESSAGING_PERSON) ||
                                       extras.containsKey("android.people.list") ||
                                       hasInlineReplyAction(notification);
+
+            // Peer-to-peer personal messages MUST NEVER be auto-cancelled as SPAM (2)!
+            // Even if the ML model or adaptive feedback classified it as Spam,
+            // direct personal communications are downgraded to Buffer (1) / Vault so they are never wiped!
+            if (isDirectMessage && classification == 2) {
+                Log.i(TAG, "Direct personal message detected for " + packageName + " -> Downgrading Spam to Buffer (never wipe chats).");
+                classification = 1;
+            }
+
+            // 2. Non-Chat Spam Cancellation
+            if (classification == 2) {
+                cancelNotification(sbn.getKey());
+                Log.i(TAG, "BLOCKED (Spam) -> Wiping notification from " + packageName);
+                if (!isGroupSummary) {
+                    logToDatabase(packageName, title, text, 2, interceptTimestamp, inferenceLatency, 1.0f);
+                }
+                return;
+            }
 
             // Compute Cognitive Context Multiplier with Adaptive Weights
             android.content.SharedPreferences weightPrefs = getSharedPreferences(
@@ -311,12 +318,6 @@ public class IntentNotificationService extends NotificationListenerService {
                     logToDatabase(packageName, title, text, classification == 0 ? 0 : 1, interceptTimestamp, inferenceLatency, contextMultiplier);
                 }
                 return; // Direct pass-through to user!
-            }
-
-            // Peer-to-peer personal messages MUST NEVER be auto-cancelled as SPAM (2)
-            if (isDirectMessage && classification == 2) {
-                Log.i(TAG, "Direct personal message detected for " + packageName + " -> Downgrading Spam to Buffer (never wipe chats).");
-                classification = 1;
             }
 
             // TTD / Implicit Feedback Override
