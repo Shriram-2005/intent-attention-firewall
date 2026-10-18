@@ -162,4 +162,25 @@ public class IntentBrainTest {
         assertTrue(IntentBrain.parseFlutterListSafely(null).isEmpty());
         assertTrue(IntentBrain.parseFlutterListSafely("").isEmpty());
     }
+
+    // ── 7. REAL PRODUCTION TEST: Friends & Personal Messages Never Classified As Spam ─
+    @Test
+    public void testProductionClassifier_PersonalMessagesMustNeverBeSpam() {
+        String msg1 = "Priya: check out this photo from yesterday";
+        String msg2 = "Amit: I’m free tomorrow, want to grab coffee?";
+        String msg3 = "Friend: new restaurant opened near us, let’s try it";
+        String msg4 = "Sara: thanks for the help with the project";
+        String msg5 = "Hey, are you back home yet?";
+        String msg6 = "Alex: sent you a video from the concert";
+        String msg7 = "Can we meet up today?";
+
+        // Under heuristic evaluation without explicit user block rules, personal messages MUST NOT be Spam (2)
+        assertNotEquals("Priya photo message must never be classified as Spam (2)", 2, IntentBrain.evaluateHeuristics(msg1, null, null, null, null));
+        assertNotEquals("Amit coffee message must never be classified as Spam (2)", 2, IntentBrain.evaluateHeuristics(msg2, null, null, null, null));
+        assertNotEquals("Friend restaurant message must never be classified as Spam (2)", 2, IntentBrain.evaluateHeuristics(msg3, null, null, null, null));
+        assertNotEquals("Sara project message must never be classified as Spam (2)", 2, IntentBrain.evaluateHeuristics(msg4, null, null, null, null));
+        assertNotEquals("Back home message must never be classified as Spam (2)", 2, IntentBrain.evaluateHeuristics(msg5, null, null, null, null));
+        assertNotEquals("Alex video message must never be classified as Spam (2)", 2, IntentBrain.evaluateHeuristics(msg6, null, null, null, null));
+        assertNotEquals("Meet today message must never be classified as Spam (2)", 2, IntentBrain.evaluateHeuristics(msg7, null, null, null, null));
+    }
 }

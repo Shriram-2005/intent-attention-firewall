@@ -482,11 +482,12 @@ public class IntentBrain {
             }
         }
 
-        // Sweep 2: Deletion Priority (SPAM)
+        // Sweep 2: System Blocked Heuristics -> Route to Vault (Buffer), NEVER auto-cancel!
+        // Only explicit user rules (Step 2) are permitted to return 2 (Spam/Cancel).
         for (String word : notificationWords) {
             if (word.isEmpty()) continue;
             if (com.intent.intent_app.HeuristicDictionary.SYSTEM_BLOCKED_KEYWORDS.contains(word)) {
-                return 2; // Spam
+                return 1; // Route to Vault (Buffer)
             }
         }
 

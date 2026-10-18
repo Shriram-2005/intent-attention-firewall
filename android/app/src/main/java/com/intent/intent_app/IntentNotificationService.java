@@ -248,6 +248,28 @@ public class IntentNotificationService extends NotificationListenerService {
                 return;
             }
 
+            // 1. Saved Contact Protection: Always show messages from saved contacts
+            if (!title.isEmpty() && isSavedContact(title)) {
+                Log.i(TAG, "SAVED CONTACT PASS-THROUGH -> Allowed message from contact: " + title);
+                if (!isGroupSummary) {
+                    logToDatabase(packageName, title, text, 0, interceptTimestamp, inferenceLatency, 1.5f);
+                }
+                return; // Direct pass-through to user!
+            }
+
+            // 2. Direct Peer-to-Peer Message Detection (WhatsApp, SMS, Telegram, Signal, DMs)
+            boolean isDirectMessage = Notification.CATEGORY_MESSAGE.equals(notification.category) ||
+                                      Notification.CATEGORY_CALL.equals(notification.category) ||
+                                      extras.containsKey(Notification.EXTRA_MESSAGING_PERSON) ||
+                                      extras.containsKey("android.people.list") ||
+                                      hasInlineReplyAction(notification);
+
+            // Peer-to-peer personal messages MUST NEVER be auto-cancelled as SPAM (2)
+            if (isDirectMessage && classification == 2) {
+                Log.i(TAG, "Direct personal message detected for " + packageName + " -> Downgrading Spam to Buffer (never wipe chats).");
+                classification = 1;
+            }
+
             // Compute Cognitive Context Multiplier with Adaptive Weights
             android.content.SharedPreferences weightPrefs = getSharedPreferences(
                 com.intent.intent_app.constants.IntentConstants.PREFS_ADAPTIVE_WEIGHTS, android.content.Context.MODE_PRIVATE);
@@ -269,7 +291,7 @@ public class IntentNotificationService extends NotificationListenerService {
             float appModifier = weightPrefs.getFloat(appModKey, 1.0f);
             
             if (classification == 1) { // If ML defaulted to Buffer or wasn't absolutely certain
-                if (appModifier < 0.7f) {
+                if (appModifier < 0.7f && !isDirectMessage) { // Do not override personal messaging apps to Spam!
                     Log.i(TAG, "TTD EMA System overriding " + packageName + " from Buffer to Spam due to low weight");
                     classification = 2; // Heavily dismissed app -> Spam
                 } else if (appModifier > 1.4f) {
@@ -729,6 +751,53 @@ public class IntentNotificationService extends NotificationListenerService {
             pendingIntentCache.put(timestamp, intent);
         } catch (Exception e) {
             Log.w(TAG, "Notice: RAM cache maxed out or unstable", e);
+        }
+    }
+
+    private boolean hasInlineReplyAction(Notification notification) {
+        if (notification == null || notification.actions == null) return false;
+        for (Notification.Action action : notification.actions) {
+            if (action != null && action.getRemoteInputs() != null && action.getRemoteInputs().length > 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private final java.util.Map<String, Boolean> contactCheckCache = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private boolean isSavedContact(String contactName) {
+        if (contactName == null || contactName.trim().isEmpty()) return false;
+        String trimmed = contactName.trim();
+        Boolean cached = contactCheckCache.get(trimmed.toLowerCase());
+        if (cached != null) return cached;
+
+        if (androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.READ_CONTACTS)
+                != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            return false;
+        }
+
+        android.database.Cursor cursor = null;
+        try {
+            android.net.Uri uri = android.net.Uri.withAppendedPath(
+                android.provider.ContactsContract.Contacts.CONTENT_FILTER_URI,
+                android.net.Uri.encode(trimmed)
+            );
+            cursor = getContentResolver().query(
+                uri,
+                new String[]{android.provider.ContactsContract.Contacts._ID},
+                null,
+                null,
+                null
+            );
+            boolean exists = cursor != null && cursor.moveToFirst();
+            if (contactCheckCache.size() > 500) contactCheckCache.clear();
+            contactCheckCache.put(trimmed.toLowerCase(), exists);
+            return exists;
+        } catch (Exception e) {
+            return false;
+        } finally {
+            if (cursor != null) cursor.close();
         }
     }
 }

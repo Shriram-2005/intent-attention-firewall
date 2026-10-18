@@ -28,30 +28,17 @@ public class HeuristicDictionary {
             "meeting", "interview", "schedule", "rescheduled", "boss", "manager", "client", 
             "deadline", "presentation", "zoom", "teams", "link", "agenda", "brief", 
             "fyi", "memo", "urgent",
-            "dad", "mom", "wife", "husband", "son", "daughter", "brother", "sister", 
-            "family", "kid", "school", "principal", "teacher", "class"
+            "dad", "mom", "wife", "husband", "son", "daughter", "brother", "sister"
         ));
 
-        // Massive matrix of ~200+ consumerism, gamification, and spam terms.
+        // High-confidence spam and promotional indicators only.
+        // Everyday conversational English words (today, tomorrow, now, free, new, check, photo, back, etc.)
+        // MUST NEVER be included here to prevent wiping personal communications.
         SYSTEM_BLOCKED_KEYWORDS = new HashSet<>(Arrays.asList(
-            "promo", "offer", "discount", "sale", "clearance", "off", "voucher", "coupon", 
-            "cashback", "save", "savings", "deal", "deals", "steal", "grab", "hurry", 
-            "limited", "expires", "midnight", "today", "tomorrow", "exclusive", "vip", "early",
-            "win", "winner", "won", "prize", "jackpot", "lottery", "draw", "spin", "chance", 
-            "claim", "reward", "redeem", "free", "gift", "giveaway", "bonus", "tokens", "coins",
-            "lootbox", "chest", "level", "upgrade", "points",
-            "subscribe", "newsletter", "update", "latest", "news", "trending", "viral", 
-            "missed", "check", "out", "discover", "explore", "new", "arrival", "arrivals", 
-            "collection", "season", "festive", "special", "now",
-            "cart", "abandoned", "forgot", "items", "waiting", "back", "stock", "restocked", 
-            "buy", "shop", "purchase", "store", "online", "app", "download", "install", "rate", 
-            "review", "feedback", "survey", "participate",
-            "liked", "commented", "shared", "post", "photo", "video", "status", "story", 
-            "live", "stream", "broadcast", "channel", "followed", "friend", "request", 
-            "suggestion", "people", "know", "connect", "network", "profile", "viewed",
-            "loan", "credit", "card", "apply", "approved", "pre-approved", "instant", "cash",
-            "lending", "interest", "emi", "finance", "investment", "multiply", "crypto",
-            "bitcoin", "trading", "stocks", "portfolio", "wealth", "rich"
+            "promo", "promocode", "coupon", "voucher", "cashback", "discount", 
+            "lottery", "jackpot", "sweepstakes", "giveaway", "unsolicited", 
+            "telemarketing", "preapproved", "pre-approved", "optout", "opt-out", 
+            "unsubscribe", "lootbox"
         ));
 
         // Informational Context Matrix (~50+ terms). Explicitly triaged into Buffer.
