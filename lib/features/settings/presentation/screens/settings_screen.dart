@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/state/engine_state.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -84,7 +85,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          backgroundColor: Colors.black,
+          backgroundColor: AppTheme.surfaceElevated,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
             side: const BorderSide(color: Colors.redAccent, width: 1),
@@ -92,12 +93,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           title: Text('CRUCIAL WARNING', style: GoogleFonts.inter(color: Colors.redAccent, fontWeight: FontWeight.bold, letterSpacing: 1.0)),
           content: Text(
             'Warning: Purging data permanently removes ALL intercepted data and log history from the local database. You will not be able to recover or export these logs.',
-            style: GoogleFonts.inter(color: Colors.white70, fontSize: 13, height: 1.5),
+            style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 13, height: 1.5),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: Text('CANCEL', style: GoogleFonts.inter(color: Colors.white54)),
+              child: Text('CANCEL', style: GoogleFonts.inter(color: AppTheme.textMuted)),
             ),
             TextButton(
               onPressed: () async {
@@ -142,6 +143,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   physics: const ClampingScrollPhysics(),
                   padding: const EdgeInsets.only(left: 32.0, right: 32.0, bottom: 32.0),
                   children: [
+                    _buildSectionHeader('APPEARANCE & THEME'),
+                    const SizedBox(height: 16),
+                    _buildThemeSelector(),
+                    _buildDivider(),
                     _buildSectionHeader('AI DIRECTIVES'),
                     const SizedBox(height: 16),
                     _buildSettingsRow(
@@ -193,21 +198,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
         timePickerTheme: TimePickerThemeData(
           dialHandColor: Colors.orangeAccent,
           hourMinuteColor: WidgetStateColor.resolveWith((states) => states.contains(WidgetState.selected) ? Colors.orangeAccent.withValues(alpha: 0.3) : AppTheme.surfaceElevated),
-          hourMinuteTextColor: WidgetStateColor.resolveWith((states) => states.contains(WidgetState.selected) ? Colors.orangeAccent : Colors.white),
+          hourMinuteTextColor: WidgetStateColor.resolveWith((states) => states.contains(WidgetState.selected) ? Colors.orangeAccent : AppTheme.textPrimary),
           dayPeriodColor: WidgetStateColor.resolveWith((states) => states.contains(WidgetState.selected) ? Colors.orangeAccent.withValues(alpha: 0.3) : AppTheme.surfaceDark),
-          dayPeriodTextColor: WidgetStateColor.resolveWith((states) => states.contains(WidgetState.selected) ? Colors.orangeAccent : Colors.white),
+          dayPeriodTextColor: WidgetStateColor.resolveWith((states) => states.contains(WidgetState.selected) ? Colors.orangeAccent : AppTheme.textPrimary),
           dialBackgroundColor: AppTheme.surfaceElevated,
-          dialTextColor: WidgetStateColor.resolveWith((states) => states.contains(WidgetState.selected) ? Colors.black : Colors.white),
+          dialTextColor: WidgetStateColor.resolveWith((states) => states.contains(WidgetState.selected) ? Colors.black : AppTheme.textPrimary),
         ),
-        colorScheme: const ColorScheme.dark(
-          primary: Colors.orangeAccent,
-          onPrimary: Colors.black,
-          surface: AppTheme.surfaceDark,
-          onSurface: Colors.white,
-          surfaceContainer: AppTheme.surfaceDark,
-          surfaceContainerHighest: AppTheme.surfaceElevated,
-          surfaceContainerHigh: AppTheme.surfaceElevated,
-        ),
+        colorScheme: AppTheme.isLight
+            ? ColorScheme.light(
+                primary: Colors.orangeAccent,
+                onPrimary: Colors.white,
+                surface: AppTheme.surfaceElevated,
+                onSurface: AppTheme.textPrimary,
+              )
+            : ColorScheme.dark(
+                primary: Colors.orangeAccent,
+                onPrimary: Colors.black,
+                surface: AppTheme.surfaceDark,
+                onSurface: AppTheme.textPrimary,
+              ),
       ),
       child: child!,
     );
@@ -455,17 +464,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.transparent,
-        border: Border.all(color: Colors.white24, width: 1),
+        color: AppTheme.surfaceElevated,
+        border: Border.all(color: AppTheme.surfaceBorder, width: 1),
         borderRadius: BorderRadius.circular(12),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<int>(
           value: _bufferIntervalMins,
-          dropdownColor: Colors.black87,
-          icon: const Icon(CupertinoIcons.chevron_down, color: Colors.white54, size: 16),
+          dropdownColor: AppTheme.surfaceElevated,
+          icon: Icon(CupertinoIcons.chevron_down, color: AppTheme.textSecondary, size: 16),
           style: GoogleFonts.inter(
-            color: Colors.white,
+            color: AppTheme.textPrimary,
             fontSize: 16,
             fontWeight: FontWeight.w400,
           ),
@@ -494,17 +503,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.transparent,
-        border: Border.all(color: Colors.white24, width: 1),
+        color: AppTheme.surfaceElevated,
+        border: Border.all(color: AppTheme.surfaceBorder, width: 1),
         borderRadius: BorderRadius.circular(12),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<int>(
           value: _bufferSummaryCount,
-          dropdownColor: Colors.black87,
-          icon: const Icon(CupertinoIcons.chevron_down, color: Colors.white54, size: 16),
+          dropdownColor: AppTheme.surfaceElevated,
+          icon: Icon(CupertinoIcons.chevron_down, color: AppTheme.textSecondary, size: 16),
           style: GoogleFonts.inter(
-            color: Colors.white,
+            color: AppTheme.textPrimary,
             fontSize: 16,
             fontWeight: FontWeight.w400,
           ),
@@ -525,10 +534,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-
-
-
-
   void _showSupportBottomSheet(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -543,17 +548,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.transparent,
-        border: Border.all(color: Colors.white24, width: 1),
+        color: AppTheme.surfaceElevated,
+        border: Border.all(color: AppTheme.surfaceBorder, width: 1),
         borderRadius: BorderRadius.circular(12),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<int>(
           value: _historyRetentionDays,
-          dropdownColor: Colors.black87,
-          icon: const Icon(CupertinoIcons.chevron_down, color: Colors.white54, size: 16),
+          dropdownColor: AppTheme.surfaceElevated,
+          icon: Icon(CupertinoIcons.chevron_down, color: AppTheme.textSecondary, size: 16),
           style: GoogleFonts.inter(
-            color: Colors.white,
+            color: AppTheme.textPrimary,
             fontSize: 16,
             fontWeight: FontWeight.w400,
           ),
@@ -571,6 +576,100 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildThemeSelector() {
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: AppTheme.themeModeNotifier,
+      builder: (context, currentMode, _) {
+        final isDark = currentMode == ThemeMode.dark;
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: AppTheme.surfaceElevated,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppTheme.surfaceBorder, width: 1),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    HapticFeedback.lightImpact();
+                    AppTheme.setTheme(ThemeMode.dark);
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.easeOut,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      color: isDark ? (AppTheme.isLight ? Colors.black : Colors.white12) : Colors.transparent,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          CupertinoIcons.moon_fill,
+                          size: 16,
+                          color: isDark ? Colors.white : AppTheme.textSecondary,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'OLED Dark',
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            fontWeight: isDark ? FontWeight.w700 : FontWeight.w500,
+                            color: isDark ? Colors.white : AppTheme.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    HapticFeedback.lightImpact();
+                    AppTheme.setTheme(ThemeMode.light);
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.easeOut,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      color: !isDark ? (AppTheme.isLight ? const Color(0xFF111111) : Colors.white) : Colors.transparent,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          CupertinoIcons.sun_max_fill,
+                          size: 16,
+                          color: !isDark ? Colors.white : AppTheme.textSecondary,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Clean Light',
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            fontWeight: !isDark ? FontWeight.w700 : FontWeight.w500,
+                            color: !isDark ? Colors.white : AppTheme.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

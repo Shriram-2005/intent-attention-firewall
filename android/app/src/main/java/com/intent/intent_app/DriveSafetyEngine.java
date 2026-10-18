@@ -130,31 +130,37 @@ public class DriveSafetyEngine implements LocationListener, SensorEventListener 
         android.app.NotificationManager nm = (android.app.NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
         if (nm == null) return;
 
+        final int notifId = com.intent.intent_app.constants.IntentConstants.NOTIFICATION_ID_DRIVING;
+        final String channelId = com.intent.intent_app.constants.IntentConstants.CHANNEL_DRIVING;
+
         if (this.isDriving) {
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
                 android.app.NotificationChannel channel = new android.app.NotificationChannel(
-                        "driving_mode_channel",
+                        channelId,
                         "Driving Mode Alerts",
-                        android.app.NotificationManager.IMPORTANCE_DEFAULT);
+                        android.app.NotificationManager.IMPORTANCE_LOW);
+                channel.setDescription("Passive status indicator when driving mode is engaged.");
                 nm.createNotificationChannel(channel);
             }
             
             android.app.Notification.Builder builder;
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                builder = new android.app.Notification.Builder(context, "driving_mode_channel");
+                builder = new android.app.Notification.Builder(context, channelId);
             } else {
                 builder = new android.app.Notification.Builder(context);
+                builder.setPriority(android.app.Notification.PRIORITY_LOW);
             }
             
             android.app.Notification notif = builder
-                    .setContentTitle("Driving Mode Enabled")
-                    .setContentText("Smart Driving Mode Active. Non-urgent notifications are paused for your safety.")
+                    .setContentTitle("Driving Mode Active")
+                    .setContentText("Non-urgent alerts buffered. Critical calls and urgent messages will still reach you.")
                     .setSmallIcon(android.R.drawable.ic_dialog_map)
+                    .setCategory(android.app.Notification.CATEGORY_SERVICE)
                     .setOngoing(true)
                     .build();
-            nm.notify(9999, notif);
+            nm.notify(notifId, notif);
         } else {
-            nm.cancel(9999);
+            nm.cancel(notifId);
         }
     }
 

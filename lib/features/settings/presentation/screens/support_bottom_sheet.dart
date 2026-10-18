@@ -98,10 +98,10 @@ class _SupportBottomSheetState extends State<SupportBottomSheet> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          backgroundColor: Colors.black,
+          backgroundColor: AppTheme.surfaceElevated,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
-            side: const BorderSide(color: Colors.white24, width: 1),
+            side: BorderSide(color: AppTheme.surfaceBorder, width: 1),
           ),
           contentPadding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
           content: Column(
@@ -112,7 +112,7 @@ class _SupportBottomSheetState extends State<SupportBottomSheet> {
               Text(
                 'Thank you so much',
                 style: GoogleFonts.inter(
-                  color: Colors.white,
+                  color: AppTheme.textPrimary,
                   fontSize: 20,
                   fontWeight: FontWeight.w600,
                 ),
@@ -122,7 +122,7 @@ class _SupportBottomSheetState extends State<SupportBottomSheet> {
                 'Your support keeps Intent free for everyone. This means everything to me as a solo developer.',
                 textAlign: TextAlign.center,
                 style: GoogleFonts.inter(
-                  color: Colors.white70,
+                  color: AppTheme.textSecondary,
                   fontSize: 14,
                   height: 1.5,
                 ),
@@ -140,8 +140,8 @@ class _SupportBottomSheetState extends State<SupportBottomSheet> {
               ElevatedButton(
                 onPressed: () => Navigator.pop(context),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.surfaceElevated,
-                  foregroundColor: Colors.white,
+                  backgroundColor: AppTheme.primaryColor,
+                  foregroundColor: AppTheme.surfaceDark,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -354,9 +354,9 @@ class _SupportBottomSheetState extends State<SupportBottomSheet> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppTheme.surfaceDark,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: SafeArea(
         child: Padding(

@@ -324,39 +324,61 @@ public class DbMethodChannel {
                 String sourcePath = call.argument("filePath");
                 if (sourcePath == null) return false;
                 
+                java.io.File sourceFile = new java.io.File(sourcePath);
+                if (!sourceFile.exists() || sourceFile.length() < 100) {
+                    throw new IllegalArgumentException("Invalid database backup source file.");
+                }
+
+                // Verify SQLite header bytes
+                byte[] header = new byte[16];
+                try (java.io.FileInputStream hFis = new java.io.FileInputStream(sourceFile)) {
+                    int read = hFis.read(header);
+                    if (read < 16 || !new String(header).startsWith("SQLite format 3")) {
+                        throw new IllegalArgumentException("Provided file is not a valid SQLite database.");
+                    }
+                }
+
                 // Block the IntentNotificationService from touching the database
                 com.intent.intent_app.db.IntentDatabase.isLockedForRestore = true;
-                
-                // Close the DB before overwriting
                 com.intent.intent_app.db.IntentDatabase.resetInstance();
                 
-                java.io.File sourceFile = new java.io.File(sourcePath);
                 java.io.File dbPath = context.getDatabasePath("intent_database");
                 java.io.File walPath = context.getDatabasePath("intent_database-wal");
                 java.io.File shmPath = context.getDatabasePath("intent_database-shm");
                 
-                // Delete WAL and SHM as we are restoring a fully checkpointed database
-                if (walPath.exists()) walPath.delete();
-                if (shmPath.exists()) shmPath.delete();
-                
-                try (java.io.FileInputStream fis = new java.io.FileInputStream(sourceFile);
-                     java.io.FileOutputStream fos = new java.io.FileOutputStream(dbPath)) {
-                    byte[] buffer = new byte[1024 * 4];
-                    int len;
-                    while ((len = fis.read(buffer)) > 0) {
-                        fos.write(buffer, 0, len);
-                    }
-                    fos.flush();
-                    fos.getFD().sync(); // CRITICAL: Force OS to write to flash memory before JVM termination!
-                } catch (Exception e) {
-                    com.intent.intent_app.db.IntentDatabase.isLockedForRestore = false;
-                    throw new RuntimeException("DB Import Error: " + e.getMessage(), e);
+                java.io.File rollbackBackup = new java.io.File(context.getCacheDir(), "intent_db_rollback.bak");
+                if (dbPath.exists()) {
+                    copyFileAtomic(dbPath, rollbackBackup);
                 }
 
-                // If we succeeded, we can leave the lock true because SystemNavigator.pop() will 
-                // gracefully destroy the app anyway.
-                com.intent.intent_app.db.IntentDatabase.isLockedForRestore = false;
-                return true;
+                java.io.File tmpDest = new java.io.File(dbPath.getParentFile(), "intent_database.tmp");
+
+                try {
+                    copyFileAtomic(sourceFile, tmpDest);
+
+                    if (walPath.exists()) walPath.delete();
+                    if (shmPath.exists()) shmPath.delete();
+
+                    if (dbPath.exists()) dbPath.delete();
+                    if (!tmpDest.renameTo(dbPath)) {
+                        copyFileAtomic(tmpDest, dbPath);
+                        tmpDest.delete();
+                    }
+
+                    if (rollbackBackup.exists()) rollbackBackup.delete();
+                    return true;
+                } catch (Exception e) {
+                    Log.e(TAG, "DB Import Error, attempting rollback", e);
+                    if (rollbackBackup.exists()) {
+                        try {
+                            copyFileAtomic(rollbackBackup, dbPath);
+                            rollbackBackup.delete();
+                        } catch (Exception ignored) {}
+                    }
+                    throw new RuntimeException("DB Import Failed (Rolled Back): " + e.getMessage(), e);
+                } finally {
+                    com.intent.intent_app.db.IntentDatabase.isLockedForRestore = false;
+                }
             }
 
             case "requestPermissions": {
@@ -366,6 +388,19 @@ public class DbMethodChannel {
 
             default:
                 throw new UnsupportedOperationException("Unknown optimized method: " + call.method);
+        }
+    }
+
+    private static void copyFileAtomic(java.io.File src, java.io.File dst) throws java.io.IOException {
+        try (java.io.FileInputStream fis = new java.io.FileInputStream(src);
+             java.io.FileOutputStream fos = new java.io.FileOutputStream(dst)) {
+            byte[] buffer = new byte[1024 * 8];
+            int len;
+            while ((len = fis.read(buffer)) > 0) {
+                fos.write(buffer, 0, len);
+            }
+            fos.flush();
+            fos.getFD().sync();
         }
     }
 }

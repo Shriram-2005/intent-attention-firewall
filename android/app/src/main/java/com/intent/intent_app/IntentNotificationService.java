@@ -55,27 +55,33 @@ public class IntentNotificationService extends NotificationListenerService {
     // High-speed volatility RAM cache to hold Deep Linking Portals
     public static final ConcurrentHashMap<Long, PendingIntent> pendingIntentCache = new ConcurrentHashMap<>();
     private static final int MAX_CACHE_SIZE = 500;
-    private final LinkedList<CharSequence> bufferInbox = new LinkedList<>();
     private final java.util.concurrent.ExecutorService dbExecutor = java.util.concurrent.Executors.newSingleThreadExecutor();
+    private final ConcurrentHashMap<String, String> appLabelCache = new ConcurrentHashMap<>();
 
     // Ignore core OS noise but allow EVERYTHING else to be analyzed
     private List<String> getIgnoredPackages() {
-        android.content.SharedPreferences prefs = getApplicationContext().getSharedPreferences("FlutterSharedPreferences", android.content.Context.MODE_PRIVATE);
-        return IntentBrain.parseFlutterListSafely(prefs.getString("flutter.ignored_packages", "[]"));
+        android.content.SharedPreferences prefs = getApplicationContext().getSharedPreferences(
+            com.intent.intent_app.constants.IntentConstants.PREFS_FLUTTER, android.content.Context.MODE_PRIVATE);
+        Object raw = com.intent.intent_app.constants.IntentConstants.getFlutterPref(
+            prefs, com.intent.intent_app.constants.IntentConstants.KEY_IGNORED_PACKAGES);
+        return IntentBrain.parseFlutterListSafely(raw);
     }
 
     private String getAppLabel(String packageName) {
-        if (packageName == null) return "";
+        if (packageName == null || packageName.isEmpty()) return "";
+        String cached = appLabelCache.get(packageName);
+        if (cached != null) return cached;
         try {
             android.content.pm.PackageManager pm = getApplicationContext().getPackageManager();
             android.content.pm.ApplicationInfo info = pm.getApplicationInfo(packageName, 0);
             CharSequence label = pm.getApplicationLabel(info);
             if (label != null) {
-                return label.toString().toLowerCase().trim();
+                String result = label.toString().toLowerCase().trim();
+                appLabelCache.put(packageName, result);
+                return result;
             }
-        } catch (android.content.pm.PackageManager.NameNotFoundException e) {
-            // Ignore
-        }
+        } catch (Exception ignored) {}
+        appLabelCache.put(packageName, "");
         return "";
     }
 
@@ -210,26 +216,13 @@ public class IntentNotificationService extends NotificationListenerService {
 
             // Deduplicate exact content within 20000ms (20 seconds) for heavy network bursting
             String exactSignature = packageName + "|||" + title + "|||" + text;
-            Long lastProcessed = duplicateCache.get(exactSignature);
-            if (lastProcessed != null && (interceptTimestamp - lastProcessed) < 20000) {
-                return; // Ignore exact duplicate broadcast by the OS
-            }
-            duplicateCache.put(exactSignature, interceptTimestamp);
-            
-            // Periodically clean up duplicateCache to avoid memory leaks
-            if (duplicateCache.size() > 1000) {
-                long now = System.currentTimeMillis();
-                duplicateCache.entrySet().removeIf(entry -> (now - entry.getValue()) > 60000);
-                if (duplicateCache.size() > 4000) {
-                    duplicateCache.clear();
+            synchronized (duplicateCache) {
+                Long lastProcessed = duplicateCache.get(exactSignature);
+                if (lastProcessed != null && (interceptTimestamp - lastProcessed) < 20000) {
+                    return; // Ignore exact duplicate broadcast by the OS
                 }
+                duplicateCache.put(exactSignature, interceptTimestamp);
             }
-
-
-
-
-
-
 
             // Explicit textual fail-safes for OEM download managers that don't respect proper Android progress APIs
             String rawContext = (title + " " + text).toLowerCase();
@@ -256,7 +249,8 @@ public class IntentNotificationService extends NotificationListenerService {
             }
 
             // Compute Cognitive Context Multiplier with Adaptive Weights
-            android.content.SharedPreferences weightPrefs = getSharedPreferences("intent_adaptive_weights", android.content.Context.MODE_PRIVATE);
+            android.content.SharedPreferences weightPrefs = getSharedPreferences(
+                com.intent.intent_app.constants.IntentConstants.PREFS_ADAPTIVE_WEIGHTS, android.content.Context.MODE_PRIVATE);
             float contextMultiplier = weightPrefs.getFloat("default_weight", 1.5f); 
             boolean isMovingFast = com.intent.intent_app.DriveSafetyEngine.getInstance(this).isDriving();
             
@@ -271,40 +265,49 @@ public class IntentNotificationService extends NotificationListenerService {
             }
 
             // TTD / Implicit Feedback Override
-            // The adaptive EMA tracks Time-To-Dismiss (TTD) milliseconds mathematically.
-            // We read the computed appModifier to dynamically correct baseline ML classification.
             String appModKey = "app_mod_" + packageName;
             float appModifier = weightPrefs.getFloat(appModKey, 1.0f);
             
             if (classification == 1) { // If ML defaulted to Buffer or wasn't absolutely certain
                 if (appModifier < 0.7f) {
-                    Log.i(TAG, "TTD EMA System overriding " + packageName + " from Buffer to Spam due to low weight (" + appModifier + ")");
+                    Log.i(TAG, "TTD EMA System overriding " + packageName + " from Buffer to Spam due to low weight");
                     classification = 2; // Heavily dismissed app -> Spam
                 } else if (appModifier > 1.4f) {
-                    Log.i(TAG, "TTD EMA System overriding " + packageName + " from Buffer to Urgent due to high weight (" + appModifier + ")");
+                    Log.i(TAG, "TTD EMA System overriding " + packageName + " from Buffer to Urgent due to high weight");
                     classification = 0; // Instantly opened app -> Urgent
                 }
             }
             
             // Apply global context decay threshold
-            // If it's night mode and the multiplier is heavily constrained, suppress borderline Urgent apps
             if (classification == 0 && contextMultiplier < 0.7f && appModifier < 1.2f) {
                 Log.i(TAG, "TTD EMA System overriding " + packageName + " from Urgent to Buffer (Context Threshold)");
                 classification = 1;
             }
 
-            // [DO OR DIE] Velocity Blockade
-            if (isMovingFast) { // Wipe EVERYTHING that is not VIP
-                cancelNotification(sbn.getKey());
-                Log.w(TAG, "VELOCITY SAFETY BLOCKADE -> Instantly vaporized " + packageName);
-                if (!isGroupSummary) {
-                    logToDatabase(packageName, title, "Velocity Blocked: " + text, classification, interceptTimestamp, inferenceLatency, contextMultiplier);
+            // [DO OR DIE] Velocity Blockade: Protect Urgent Alerts / OTPs even when driving!
+            if (isMovingFast) {
+                if (classification == 0) {
+                    // Critical Urgent / OTP / Emergency: PRESERVE & DELIVER SAFELY
+                    Log.i(TAG, "VELOCITY PASS-THROUGH -> Preserved Critical Urgent alert while moving from " + packageName);
+                    if (!isGroupSummary) {
+                        logToDatabase(packageName, title, text, 0, interceptTimestamp, inferenceLatency, contextMultiplier);
+                        playUrgentSound();
+                    }
+                    return; // Let it bypass safely!
+                } else {
+                    // Buffer / Spam: Silence and aggregate into Vault
+                    cancelNotification(sbn.getKey());
+                    Log.i(TAG, "VELOCITY SAFETY BLOCKADE -> Muted non-urgent alert while moving from " + packageName);
+                    if (!isGroupSummary) {
+                        logToDatabase(packageName, title, text, classification, interceptTimestamp, inferenceLatency, contextMultiplier);
+                        repostSilentBuffer(packageName, title, text, notification.getSmallIcon(), notification.contentIntent);
+                    }
+                    return;
                 }
-                return;
             }
 
-            // Update the real-time social media presence check
-            EngineState.isUserCurrentlyDistracted = isUserOnSocialMedia();
+            // Update the real-time social media presence check (throttled)
+            EngineState.isUserCurrentlyDistracted = isUserOnSocialMediaThrottled();
 
             // 4. Action Logic Switch (Optimized for aggressive silence)
             switch (classification) {
@@ -323,10 +326,9 @@ public class IntentNotificationService extends NotificationListenerService {
                         }
                     } else {
                         cancelNotification(sbn.getKey()); // AGGRESSIVE CANCEL FIRST
-                        Log.i(TAG, "INTERCEPTED (Buffer) -> Muting and saving for later from " + packageName);
+                        Log.i(TAG, "INTERCEPTED (Buffer) -> Muting and saving to Vault from " + packageName);
                         if (!isGroupSummary) {
                             logToDatabase(packageName, title, text, 1, interceptTimestamp, inferenceLatency, contextMultiplier);
-                            // repostSilentBuffer is omitted since it reposts, we might not have it in the snippet, just keeping its call
                             repostSilentBuffer(packageName, title, text, notification.getSmallIcon(), notification.contentIntent);
                         }
                     }
@@ -345,18 +347,24 @@ public class IntentNotificationService extends NotificationListenerService {
             }
 
         } catch (Exception e) {
-            // Failsafe: If the extraction logic completely crashes on a malformed payload, 
-            // the background service stays alive and doesn't crash the phone UI.
             Log.e(TAG, "CRITICAL ERROR processing intercepted notification.", e);
         }
     }
 
     // Cooldown map to prevent app feedback spam (PackageName -> LastInteractionTimestamp)
     private static final ConcurrentHashMap<String, Long> appFeedbackCooldown = new ConcurrentHashMap<>();
-
-
     private static final long COOLDOWN_MS = 60000; // 1 minute anti-spam cooldown
-    private static final java.util.concurrent.ConcurrentHashMap<String, Long> duplicateCache = new java.util.concurrent.ConcurrentHashMap<>();
+
+    // High-performance bounded deduplication cache with sliding TTL window
+    private static final int MAX_DEDUP_SIZE = 1000;
+    private static final long DEDUP_TTL_MS = 20000; // 20s window
+    private static final java.util.Map<String, Long> duplicateCache = 
+        java.util.Collections.synchronizedMap(new java.util.LinkedHashMap<String, Long>(128, 0.75f, true) {
+            @Override
+            protected boolean removeEldestEntry(java.util.Map.Entry<String, Long> eldest) {
+                return size() > MAX_DEDUP_SIZE || (System.currentTimeMillis() - eldest.getValue()) > DEDUP_TTL_MS;
+            }
+        });
 
 
 
@@ -509,6 +517,19 @@ public class IntentNotificationService extends NotificationListenerService {
         });
     }
 
+    private volatile long lastSocialCheckTime = 0;
+    private volatile boolean cachedSocialDistraction = false;
+
+    private boolean isUserOnSocialMediaThrottled() {
+        long now = System.currentTimeMillis();
+        if (now - lastSocialCheckTime < 2000) {
+            return cachedSocialDistraction;
+        }
+        lastSocialCheckTime = now;
+        cachedSocialDistraction = isUserOnSocialMedia();
+        return cachedSocialDistraction;
+    }
+
     /**
      * Checks UsageStatsManager to see if the current foreground app indicates 
      * the user is actively distracted on social media.
@@ -540,83 +561,102 @@ public class IntentNotificationService extends NotificationListenerService {
     }
 
     /**
-     * Repost the notification silently
+     * Repost the notification silently, synchronized with Room database history.
      */
     private void repostSilentBuffer(String packageName, String title, String text, Icon icon, PendingIntent originalIntent) {
-        NotificationManager manager = getSystemService(NotificationManager.class);
-        if (manager == null) return;
-
-        android.content.SharedPreferences prefs = getApplicationContext().getSharedPreferences("FlutterSharedPreferences", android.content.Context.MODE_PRIVATE);
-        // Default to 5 max lines, controlled by user (shared_preferences adds flutter. prefix)
-        int maxBufferLines = 5;
-        Object maxLinesObj = prefs.getAll().get("flutter.buffer_max_lines");
-        if (maxLinesObj instanceof Long) {
-            maxBufferLines = ((Long) maxLinesObj).intValue();
-        } else if (maxLinesObj instanceof Integer) {
-            maxBufferLines = (Integer) maxLinesObj;
-        } else if (maxLinesObj instanceof String) {
+        dbExecutor.execute(() -> {
             try {
-                maxBufferLines = Integer.parseInt((String) maxLinesObj);
-            } catch (NumberFormatException e) {
-                // Ignore and use default 5
+                NotificationManager manager = getSystemService(NotificationManager.class);
+                if (manager == null) return;
+
+                android.content.SharedPreferences prefs = getApplicationContext().getSharedPreferences(
+                    com.intent.intent_app.constants.IntentConstants.PREFS_FLUTTER, android.content.Context.MODE_PRIVATE);
+                
+                int maxBufferLines = 5;
+                Object maxLinesObj = com.intent.intent_app.constants.IntentConstants.getFlutterPref(
+                    prefs, com.intent.intent_app.constants.IntentConstants.KEY_BUFFER_MAX_LINES);
+                if (maxLinesObj instanceof Number) {
+                    maxBufferLines = ((Number) maxLinesObj).intValue();
+                } else if (maxLinesObj instanceof String) {
+                    try { maxBufferLines = Integer.parseInt((String) maxLinesObj); } catch (Exception ignored) {}
+                }
+
+                java.util.Calendar cal = java.util.Calendar.getInstance();
+                cal.set(java.util.Calendar.HOUR_OF_DAY, 0);
+                cal.set(java.util.Calendar.MINUTE, 0);
+                cal.set(java.util.Calendar.SECOND, 0);
+                long startOfDay = cal.getTimeInMillis();
+
+                int totalToday = 0;
+                java.util.List<com.intent.intent_app.db.entities.NotificationEntity> recentBuffered = null;
+                if (!com.intent.intent_app.db.IntentDatabase.isLockedForRestore) {
+                    try {
+                        com.intent.intent_app.db.dao.NotificationDao dao = com.intent.intent_app.db.IntentDatabase.getInstance(this).notificationDao();
+                        totalToday = dao.getCountByCategoryForToday(1, startOfDay);
+                        recentBuffered = dao.getHistoryFiltered(1, null, maxBufferLines, 0);
+                    } catch (Exception ignored) {}
+                }
+
+                if (totalToday <= 0) totalToday = 1;
+
+                Notification.Builder builder;
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    builder = new Notification.Builder(this, com.intent.intent_app.constants.IntentConstants.CHANNEL_BUFFER);
+                } else {
+                    builder = new Notification.Builder(this);
+                }
+
+                Notification.InboxStyle inboxStyle = new Notification.InboxStyle();
+                String latestSnippet = title + (text.isEmpty() ? "" : " - " + text);
+
+                if (recentBuffered != null && !recentBuffered.isEmpty()) {
+                    for (int i = recentBuffered.size() - 1; i >= 0; i--) {
+                        com.intent.intent_app.db.entities.NotificationEntity entity = recentBuffered.get(i);
+                        String app = getReadablePackageName(entity.packageName);
+                        String lineText = (entity.title != null ? entity.title : "") + " " + (entity.content != null ? entity.content : "");
+                        CharSequence styled;
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                            styled = android.text.Html.fromHtml("<b>" + app + "</b> &nbsp;" + lineText, android.text.Html.FROM_HTML_MODE_COMPACT);
+                        } else {
+                            styled = android.text.Html.fromHtml("<b>" + app + "</b> &nbsp;" + lineText);
+                        }
+                        inboxStyle.addLine(styled);
+                    }
+                    com.intent.intent_app.db.entities.NotificationEntity latest = recentBuffered.get(0);
+                    latestSnippet = (latest.title != null ? latest.title : "") + " " + (latest.content != null ? latest.content : "");
+                } else {
+                    String app = getReadablePackageName(packageName);
+                    CharSequence styled;
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                        styled = android.text.Html.fromHtml("<b>" + app + "</b> &nbsp;" + title + " " + text, android.text.Html.FROM_HTML_MODE_COMPACT);
+                    } else {
+                        styled = android.text.Html.fromHtml("<b>" + app + "</b> &nbsp;" + title + " " + text);
+                    }
+                    inboxStyle.addLine(styled);
+                }
+
+                inboxStyle.setBigContentTitle("Intent Vault (" + totalToday + ")");
+
+                builder.setContentTitle("Intent Vault (" + totalToday + ")")
+                       .setContentText(latestSnippet)
+                       .setSmallIcon(icon != null ? icon : Icon.createWithResource(this, android.R.drawable.sym_def_app_icon))
+                       .setStyle(inboxStyle)
+                       .setColor(Color.BLACK)
+                       .setAutoCancel(true);
+
+                if (originalIntent != null) {
+                    builder.setContentIntent(originalIntent);
+                }
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    builder.setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE);
+                }
+
+                manager.notify(com.intent.intent_app.constants.IntentConstants.NOTIFICATION_ID_BUFFER_INBOX, builder.build());
+            } catch (Exception e) {
+                Log.e(TAG, "Error posting buffer aggregate notification", e);
             }
-        }
-
-        String appName = getReadablePackageName(packageName);
-        
-        // Clean up title and do NOT truncate the text to allow the OS to wrap it to the next line
-        String cleanTitle = title.isEmpty() ? "" : title + " \u2022 ";
-        String cleanText = text;
-
-        // Use HTML to bold the App Name so it reads cleanly in the InboxStyle
-        CharSequence styledLine;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            styledLine = android.text.Html.fromHtml("<b>" + appName + "</b> &nbsp;" + cleanTitle + cleanText, android.text.Html.FROM_HTML_MODE_COMPACT);
-        } else {
-            styledLine = android.text.Html.fromHtml("<b>" + appName + "</b> &nbsp;" + cleanTitle + cleanText);
-        }
-
-        synchronized (bufferInbox) {
-            bufferInbox.addFirst(styledLine);
-            while (bufferInbox.size() > maxBufferLines) {
-                bufferInbox.removeLast();
-            }
-        }
-
-        Notification.Builder builder;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            builder = new Notification.Builder(this, "intent_buffer_channel");
-        } else {
-            builder = new Notification.Builder(this);
-        }
-
-        Notification.InboxStyle inboxStyle = new Notification.InboxStyle();
-        int totalBuffered;
-        synchronized (bufferInbox) {
-            totalBuffered = bufferInbox.size();
-            for (int i = bufferInbox.size() - 1; i >= 0; i--) {
-                inboxStyle.addLine(bufferInbox.get(i));
-            }
-        }
-        inboxStyle.setBigContentTitle("Intent Vault (" + totalBuffered + ")");
-
-        builder.setContentTitle("Intent Vault (" + totalBuffered + ")")
-               .setContentText(bufferInbox.getFirst())
-               .setSmallIcon(icon != null ? icon : Icon.createWithResource(this, android.R.drawable.sym_def_app_icon))
-               .setStyle(inboxStyle)
-               .setColor(Color.BLACK)
-               .setAutoCancel(true);
-
-        if (originalIntent != null) {
-            builder.setContentIntent(originalIntent);
-        }
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            builder.setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE);
-        }
-
-        // Exact same ID to organic in-place update the Inbox list
-        manager.notify(1001, builder.build());
+        });
     }
 
     /**

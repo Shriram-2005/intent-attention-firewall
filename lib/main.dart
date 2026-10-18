@@ -17,18 +17,20 @@ void main() async {
     DeviceOrientation.portraitDown,
   ]);
 
+  // Initialize SharedPreferences Memory, Core Engine State, and Global Theme
+  await EngineState.init();
+  await AppTheme.initTheme();
+
   // Edge-to-edge display
   SystemChrome.setSystemUIOverlayStyle(
-    const SystemUiOverlayStyle(
+    SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.light,
+      statusBarIconBrightness: AppTheme.isLight ? Brightness.dark : Brightness.light,
       systemNavigationBarColor: AppTheme.surfaceDark,
-      systemNavigationBarIconBrightness: Brightness.light,
+      systemNavigationBarIconBrightness: AppTheme.isLight ? Brightness.dark : Brightness.light,
     ),
   );
 
-  // Initialize SharedPreferences Memory and Core Engine State
-  await EngineState.init();
   final prefs = await SharedPreferences.getInstance();
   final bool hasSeenOnboarding = prefs.getBool('has_seen_onboarding') ?? false;
 
@@ -45,11 +47,18 @@ class IntentApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp.router(
-      title: 'Intent',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.darkTheme,
-      routerConfig: AppRouter.getRouter(hasSeenOnboarding),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: AppTheme.themeModeNotifier,
+      builder: (context, mode, child) {
+        return MaterialApp.router(
+          title: 'Intent',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.lightTheme,
+          darkTheme: AppTheme.darkTheme,
+          themeMode: mode,
+          routerConfig: AppRouter.getRouter(hasSeenOnboarding),
+        );
+      },
     );
   }
 }

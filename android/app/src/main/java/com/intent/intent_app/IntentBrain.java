@@ -187,12 +187,12 @@ public class IntentBrain {
             }
             
             
-            Log.d(TAG, "Classification Result - Text: [" + text + "], Index: " + maxIndex + ", Prob: " + maxProb);
+            Log.d(TAG, "Classification Result - Index: " + maxIndex + ", Confidence: " + maxProb);
             
             // Safety Check: If the Neural Engine is not highly confident, 
             // always default to Buffer so the user can see and review it manually.
             if (maxProb < 0.70f) {
-                Log.d(TAG, "Neural confidence too low. Failsafe activated. Defaulting to Buffer (1).");
+                Log.d(TAG, "Neural confidence below 0.70 threshold. Defaulting to Buffer (1).");
                 return 1;
             }
             
@@ -204,6 +204,10 @@ public class IntentBrain {
         }
     }
 
+    /**
+     * Resilient parser for Flutter SharedPreferences string lists.
+     * Safely handles Collection, Flutter '!' delimiter format, JSON arrays, and comma lists.
+     */
     public static java.util.ArrayList<String> parseFlutterListSafely(Object prefObj) {
         java.util.ArrayList<String> list = new java.util.ArrayList<>();
         if (prefObj == null) return list;
@@ -211,138 +215,207 @@ public class IntentBrain {
         if (prefObj instanceof java.util.Collection) {
             for (Object obj : (java.util.Collection<?>) prefObj) {
                 if (obj != null) {
-                    list.add(obj.toString().toLowerCase().trim());
+                    String s = obj.toString().toLowerCase().trim();
+                    if (!s.isEmpty()) list.add(s);
                 }
             }
             return list;
         }
 
-        String raw = prefObj.toString();
+        String raw = prefObj.toString().trim();
+        if (raw.isEmpty()) return list;
+
         String prefix = "VGhpcyBpcyB0aGUgcHJlZml4IGZvciBhIGxpc3Qu";
+        String content = raw.startsWith(prefix) ? raw.substring(prefix.length()) : raw;
+
+        // An empty Flutter list is encoded as "!" or empty string
+        if (content.isEmpty() || content.equals("!")) {
+            return list;
+        }
 
         try {
-            if (raw.startsWith(prefix)) {
-                String jsonStr = raw.substring(prefix.length());
-                org.json.JSONArray arr = new org.json.JSONArray(jsonStr);
-                for (int i=0; i<arr.length(); i++) {
-                    list.add(arr.getString(i).toLowerCase().trim());
-                }
-            } else if (raw.startsWith("[")) {
-                // It might be a toString() of a Collection like [item1, item2]
-                String inner = raw.substring(1, raw.length() - 1);
-                String[] items = inner.split(",");
+            // Flutter shared_preferences uses '!' delimiter format: "!item1!item2" or "!item"
+            if (content.startsWith("!")) {
+                String[] items = content.substring(1).split("!");
                 for (String item : items) {
                     String trimmed = item.trim().toLowerCase();
-                    if (!trimmed.isEmpty()) {
-                        list.add(trimmed);
-                    }
+                    if (!trimmed.isEmpty()) list.add(trimmed);
                 }
-            } else {
-                // Failsafe fallback parsing
-                String[] words = raw.toLowerCase().split("[^a-z0-9@. ]+");
-                for(String w : words) list.add(w.trim());
+                return list;
             }
-        } catch (Exception e) {
-            Log.e(TAG, "Failed parsing Flutter List safely", e);
-        }
+
+            // JSON array format: ["item1", "item2"]
+            if (content.startsWith("[")) {
+                try {
+                    org.json.JSONArray arr = new org.json.JSONArray(content);
+                    for (int i = 0; i < arr.length(); i++) {
+                        String s = arr.getString(i).toLowerCase().trim();
+                        if (!s.isEmpty()) list.add(s);
+                    }
+                    return list;
+                } catch (Exception ignored) {
+                    String inner = content.substring(1, content.length() - (content.endsWith("]") ? 1 : 0));
+                    String[] items = inner.split(",");
+                    for (String item : items) {
+                        String trimmed = item.trim().toLowerCase();
+                        if (!trimmed.isEmpty()) list.add(trimmed);
+                    }
+                    return list;
+                }
+            }
+
+            // Fallback comma/newline split
+            if (content.contains(",") || content.contains("\n")) {
+                String[] items = content.split("[,\\n]+");
+                for (String item : items) {
+                    String trimmed = item.trim().toLowerCase();
+                    if (!trimmed.isEmpty()) list.add(trimmed);
+                }
+                return list;
+            }
+
+            // Single string entry
+            list.add(content.toLowerCase().trim());
+        } catch (Exception ignored) {}
         return list;
     }
 
-    private boolean isPhoneNumber(String str) {
-        if (str == null || str.isEmpty()) return false;
+    private static final java.util.regex.Pattern PHONE_PATTERN = 
+        java.util.regex.Pattern.compile("^\\+?[0-9\\s\\-\\(\\)]{7,18}$");
+
+    private static boolean isPhoneNumber(String str) {
+        if (str == null || str.trim().isEmpty()) return false;
+        String trimmed = str.trim();
         int digits = 0;
-        for (char c : str.toCharArray()) {
+        for (char c : trimmed.toCharArray()) {
             if (Character.isDigit(c)) digits++;
-            if (Character.isLetter(c)) return false; // Contains letters, not an isolated phone number
         }
-        return digits >= 6;
+        return digits >= 7 && PHONE_PATTERN.matcher(trimmed).matches();
     }
+
+    private static boolean matchesPhoneInText(String text, String targetPhone) {
+        String targetDigits = targetPhone.replaceAll("[^0-9]", "");
+        if (targetDigits.length() < 7) return false;
+        
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("\\+?[0-9]{1,4}?[-.\\s]?\\(?\\d{2,4}?\\)?[-.\\s]?\\d{3,4}[-.\\s]?\\d{3,4}").matcher(text);
+        while (m.find()) {
+            String candidateDigits = m.group().replaceAll("[^0-9]", "");
+            if (candidateDigits.equals(targetDigits) || 
+                (candidateDigits.endsWith(targetDigits) && candidateDigits.length() - targetDigits.length() <= 3) ||
+                (targetDigits.endsWith(candidateDigits) && targetDigits.length() - candidateDigits.length() <= 3)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Matches word boundary cleanly so 'ram' doesn't match 'program' or 'grammar'.
+     */
+    private static boolean containsWord(String text, String keyword) {
+        if (text == null || keyword == null || keyword.isEmpty()) return false;
+        String trimmed = keyword.trim();
+        if (trimmed.length() <= 2) return false;
+        String regex = "(?i)\\b" + java.util.regex.Pattern.quote(trimmed) + "\\b";
+        try {
+            return java.util.regex.Pattern.compile(regex).matcher(text).find();
+        } catch (Exception e) {
+            return text.toLowerCase().contains(trimmed.toLowerCase());
+        }
+    }
+
+    // High-confidence regex patterns for mission-critical alerts
+    private static final java.util.regex.Pattern OTP_PATTERN = java.util.regex.Pattern.compile(
+        "(?i)\\b(?:one[- ]?time\\s*(?:pass(?:word)?|code|pin)|otp|verification\\s*code|auth(?:entication)?\\s*code|security\\s*(?:code|alert|pin)|login\\s*code|secret\\s*code|passcode)\\b|" +
+        "(?i)\\b(?:is|code|pin|password)[:\\s]+[0-9]{4,8}\\b|" +
+        "(?i)\\b[0-9]{4,8}\\s+is\\s+(?:your\\s+)?(?:verification|one[- ]?time|security|login|otp)\\b"
+    );
+
+    private static final java.util.regex.Pattern FINANCIAL_PATTERN = java.util.regex.Pattern.compile(
+        "(?i)\\b(?:credited|debited|transferred|withdrawn|charged|txn|transaction|card\\s*ending|acct?\\s*ending|account\\s*ending|bank\\s*alert|payment\\s*of|paid\\s*(?:rs\\.?|inr|\\$|€|£))\\b"
+    );
+
+    private static final java.util.regex.Pattern CRITICAL_SERVICE_PATTERN = java.util.regex.Pattern.compile(
+        "(?i)\\b(?:driver\\s*(?:arriving|arrived)|out\\s*for\\s*delivery|package\\s*delivered|courier|doctor|hospital|clinic|prescription|appointment|ambulance|emergency)\\b"
+    );
+
     private int executeHeuristicMatching(String text, SharedPreferences prefs) {
-        // Safe Extraction of Flutter SharedPreferences explicitly parsing JSON arrays
         java.util.ArrayList<String> rawAbsoluteVipList = cachedAbsoluteVip != null ? cachedAbsoluteVip : parseFlutterListSafely(prefs.getAll().get("flutter.absolute_vip_keywords"));
         java.util.ArrayList<String> rawUrgentList = cachedUrgent != null ? cachedUrgent : parseFlutterListSafely(prefs.getAll().get("flutter.urgent_keywords"));
         java.util.ArrayList<String> rawBufferList = cachedBuffer != null ? cachedBuffer : parseFlutterListSafely(prefs.getAll().get("flutter.buffer_keywords"));
         java.util.ArrayList<String> rawSpamList = cachedSpam != null ? cachedSpam : parseFlutterListSafely(prefs.getAll().get("flutter.block_keywords"));
 
-        // 0. The Raw Substring Match Matrix (For Absolute VIP Contacts, Emails, and normalized Phones)
         String rawLowerText = text.toLowerCase();
-        
+
+        // 0. Absolute VIP Check with Word Boundary and Phone Normalization
         for (String vipContext : rawAbsoluteVipList) {
             if (vipContext.length() > 2) {
-                // Advanced Normalized Phone Validation
                 if (isPhoneNumber(vipContext)) {
-                    String numericVip = vipContext.replaceAll("[^0-9+]", "");
-                    String numericText = rawLowerText.replaceAll("[^0-9+]", "");
-                    if (numericVip.length() >= 6 && numericText.contains(numericVip)) {
-                        Log.i(TAG, "Heuristic Matched NUMERIC VIP Context: " + numericVip);
+                    if (matchesPhoneInText(text, vipContext)) {
+                        Log.i(TAG, "Heuristic Matched NUMERIC VIP Contact");
                         return -2; // VIP Strict Bypass
                     }
-                }
-
-                // Standard Substring Validation
-                if (rawLowerText.contains(vipContext)) {
-                    Log.i(TAG, "Heuristic Matched RAW VIP Context (Email/Contact): " + vipContext);
+                } else if (containsWord(text, vipContext)) {
+                    Log.i(TAG, "Heuristic Matched WORD VIP Contact");
                     return -2; // VIP Strict Bypass
                 }
             }
         }
-        
-        // 0.25 Urgent ML Override
+
+        // 0.1 Strict OTP, Financial & Mission-Critical Delivery/Medical Alert Patterns (Zero-Drop)
+        if (OTP_PATTERN.matcher(text).find()) {
+            Log.i(TAG, "Heuristic Matched Pattern: High-Priority OTP / Security Code");
+            return 0; // Urgent
+        }
+
+        if (FINANCIAL_PATTERN.matcher(text).find()) {
+            Log.i(TAG, "Heuristic Matched Pattern: Critical Financial Transaction");
+            return 0; // Urgent
+        }
+
+        if (CRITICAL_SERVICE_PATTERN.matcher(text).find()) {
+            Log.i(TAG, "Heuristic Matched Pattern: Delivery / Medical / Emergency Alert");
+            return 0; // Urgent
+        }
+
+        // 0.25 Urgent Keyword Overrides with Word Boundaries
         for (String urgentContext : rawUrgentList) {
             if (urgentContext.length() > 2) {
                 if (isPhoneNumber(urgentContext)) {
-                    String numericUrgent = urgentContext.replaceAll("[^0-9+]", "");
-                    String numericText = rawLowerText.replaceAll("[^0-9+]", "");
-                    if (numericUrgent.length() >= 6 && numericText.contains(numericUrgent)) {
-                        Log.i(TAG, "Heuristic Matched NUMERIC URGENT Context: " + numericUrgent);
+                    if (matchesPhoneInText(text, urgentContext)) {
+                        Log.i(TAG, "Heuristic Matched NUMERIC URGENT Context");
                         return 0; // Urgent
                     }
-                }
-                if (rawLowerText.contains(urgentContext)) {
-                    Log.i(TAG, "Heuristic Matched RAW URGENT Context: " + urgentContext);
+                } else if (containsWord(text, urgentContext)) {
+                    Log.i(TAG, "Heuristic Matched WORD URGENT Context");
                     return 0; // Urgent
                 }
             }
         }
-        
-        // 0.5. User Overrides (Spam & Buffer) via exact substring phrase matching
+
+        // 0.5. User Overrides (Spam & Buffer) via Word Boundaries
         for (String spamPhrase : rawSpamList) {
-            if (spamPhrase.length() > 2 && rawLowerText.contains(spamPhrase)) {
-                Log.i(TAG, "Heuristic Matched RAW USER SPAM Phrase: " + spamPhrase);
+            if (spamPhrase.length() > 2 && containsWord(text, spamPhrase)) {
+                Log.i(TAG, "Heuristic Matched USER SPAM Phrase");
                 return 2; // Spam
             }
         }
-        
+
         for (String bufferPhrase : rawBufferList) {
-            if (bufferPhrase.length() > 2 && rawLowerText.contains(bufferPhrase)) {
-                Log.i(TAG, "Heuristic Matched RAW USER BUFFER Phrase: " + bufferPhrase);
+            if (bufferPhrase.length() > 2 && containsWord(text, bufferPhrase)) {
+                Log.i(TAG, "Heuristic Matched USER BUFFER Phrase");
                 return 1; // Buffer
             }
         }
 
-        // 1. Rigorous Normalization & Tokenization for remaining tiers
-        String strippedText = rawLowerText.replaceAll("[^a-zA-Z0-9 ]", "");
+        // 1. Tokenization for System Dictionaries
+        String strippedText = rawLowerText.replaceAll("[^a-zA-Z0-9 ]", " ");
         String[] notificationWords = strippedText.split("\\s+");
 
-        // 1.5 Strict OTP/Security Override
-        for (String word : notificationWords) {
-            if (word.equals("otp") || word.equals("code") || word.equals("verification") || 
-                word.equals("2fa") || word.equals("authentication")) {
-                Log.i(TAG, "Heuristic Matched Strict SECURITY/OTP Keyword: " + word);
-                return 0; // Force to Urgent
-            }
-        }
-
-        // 3. The Remaining 6-Tier Waterfall Search Matrix
-        // Sweep 1: Absolute Priority (URGENT) ensures critical overrides always survive
+        // Sweep 1: Absolute Priority (URGENT)
         for (String word : notificationWords) {
             if (word.isEmpty()) continue;
-
-            // Note: Tier 1 (User VIP Override) already executed implicitly via Raw Substrings!
-            
-            // Tier 2: System VIP Baseline
             if (com.intent.intent_app.HeuristicDictionary.SYSTEM_URGENT_KEYWORDS.contains(word)) {
-                Log.i(TAG, "Heuristic Waterfall [Tier 2] Matched SYSTEM VIP: " + word);
                 return 0; // Urgent
             }
         }
@@ -350,10 +423,7 @@ public class IntentBrain {
         // Sweep 2: Deletion Priority (SPAM)
         for (String word : notificationWords) {
             if (word.isEmpty()) continue;
-
-            // Tier 4: System Spam Baseline
             if (com.intent.intent_app.HeuristicDictionary.SYSTEM_BLOCKED_KEYWORDS.contains(word)) {
-                Log.i(TAG, "Heuristic Waterfall [Tier 4] Matched SYSTEM SPAM: " + word);
                 return 2; // Spam
             }
         }
@@ -361,17 +431,12 @@ public class IntentBrain {
         // Sweep 3: Explicit Buffer Routing
         for (String word : notificationWords) {
             if (word.isEmpty()) continue;
-
-            // Tier 6: System Buffer Baseline
             if (com.intent.intent_app.HeuristicDictionary.SYSTEM_BUFFER_KEYWORDS.contains(word)) {
-                Log.i(TAG, "Heuristic Waterfall [Tier 6] Matched SYSTEM BUFFER: " + word);
                 return 1; // Buffer
             }
         }
 
-        // Tier 7: Fallback Safe Middleground (No specific semantic rules hit)
-        Log.d(TAG, "Heuristic Waterfall [Tier 7] Defeated. Forwarding to ML Engine or default Buffer.");
-        return -1;
+        return -1; // Forward to ML or default safe Buffer
     }
 }
 

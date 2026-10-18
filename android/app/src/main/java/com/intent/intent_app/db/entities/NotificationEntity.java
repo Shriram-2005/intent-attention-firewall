@@ -5,10 +5,20 @@ import androidx.room.Entity;
 import androidx.room.PrimaryKey;
 import androidx.room.Ignore;
 
+import androidx.room.Index;
+
 /**
  * ML-Intercepted Notification Entity.
  */
-@Entity(tableName = "notifications")
+@Entity(
+    tableName = "notifications",
+    indices = {
+        @Index(value = {"timestamp"}),
+        @Index(value = {"category"}),
+        @Index(value = {"package_name"}),
+        @Index(value = {"category", "timestamp"})
+    }
+)
 public class NotificationEntity {
 
     @PrimaryKey(autoGenerate = true)

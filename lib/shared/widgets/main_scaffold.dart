@@ -1,6 +1,7 @@
 import 'package:go_router/go_router.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/state/engine_state.dart';
 
@@ -46,7 +47,7 @@ class MainScaffold extends StatelessWidget {
                 Positioned.fill(
                   child: AbsorbPointer(
                     absorbing: true,
-                    child: Container(color: Colors.black.withValues(alpha: 0.97)),
+                    child: Container(color: AppTheme.surfaceDark.withValues(alpha: 0.97)),
                   ),
                 ),
               if (isLocked)
@@ -57,12 +58,12 @@ class MainScaffold extends StatelessWidget {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.bolt, color: Colors.white24, size: 64),
+                          Icon(Icons.bolt, color: AppTheme.textSecondary, size: 64),
                           const SizedBox(height: 24),
                           Text(
                             'ENGINE OFFLINE',
                             style: TextStyle(
-                              color: Colors.white38,
+                              color: AppTheme.textPrimary,
                               fontSize: 20,
                               fontWeight: FontWeight.w700,
                               letterSpacing: 4.0,
@@ -73,7 +74,7 @@ class MainScaffold extends StatelessWidget {
                             'The neural filtering engine is currently suspended. Sub-systems cannot be accessed while the engine is physically disconnected.',
                             textAlign: TextAlign.center,
                             style: TextStyle(
-                              color: Colors.white24,
+                              color: AppTheme.textSecondary,
                               fontSize: 13,
                               height: 1.5,
                             ),
@@ -87,13 +88,13 @@ class MainScaffold extends StatelessWidget {
                               padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
                               decoration: BoxDecoration(
                                 color: Colors.transparent,
-                                border: Border.all(color: Colors.white38),
+                                border: Border.all(color: AppTheme.surfaceBorder),
                                 borderRadius: BorderRadius.circular(100),
                               ),
                               child: Text(
                                 'WAKE ENGINE',
                                 style: TextStyle(
-                                  color: Colors.white,
+                                  color: AppTheme.textPrimary,
                                   fontSize: 13,
                                   fontWeight: FontWeight.bold,
                                   letterSpacing: 2.0,
@@ -110,28 +111,39 @@ class MainScaffold extends StatelessWidget {
           );
         },
       ),
-      bottomNavigationBar: Container(
-        color: AppTheme.surfaceDark,
-        padding: const EdgeInsets.only(top: 16.0, bottom: 32.0),
-        child: SafeArea(
-          top: false,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              _buildNavItem(0, CupertinoIcons.home),
-              _buildNavItem(1, CupertinoIcons.chart_bar),
-              _buildNavItem(2, Icons.bolt_outlined),
-              _buildNavItem(3, CupertinoIcons.slider_horizontal_3),
-            ],
-          ),
-        ),
+      bottomNavigationBar: ValueListenableBuilder<ThemeMode>(
+        valueListenable: AppTheme.themeModeNotifier,
+        builder: (context, themeMode, _) {
+          final isDark = themeMode == ThemeMode.dark;
+          final navBg = AppTheme.surfaceDark;
+          final activeIconColor = AppTheme.textPrimary;
+          final inactiveIconColor = AppTheme.textMuted;
+
+          return Container(
+            color: navBg,
+            padding: const EdgeInsets.only(top: 16.0, bottom: 32.0),
+            child: SafeArea(
+              top: false,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  _buildNavItem(0, CupertinoIcons.home, activeIconColor, inactiveIconColor),
+                  _buildNavItem(1, CupertinoIcons.chart_bar, activeIconColor, inactiveIconColor),
+                  _buildNavItem(2, Icons.bolt_outlined, activeIconColor, inactiveIconColor),
+                  _buildNavItem(3, CupertinoIcons.slider_horizontal_3, activeIconColor, inactiveIconColor),
+                  _buildThemeToggle(isDark),
+                ],
+              ),
+            ),
+          );
+        },
       ),
       ),
     );
   }
 
-  Widget _buildNavItem(int index, IconData icon) {
+  Widget _buildNavItem(int index, IconData icon, Color activeColor, Color inactiveColor) {
     final bool isActive = navigationShell.currentIndex == index;
     return GestureDetector(
       onTap: () {
@@ -146,7 +158,7 @@ class MainScaffold extends StatelessWidget {
         children: [
           Icon(
             icon,
-            color: isActive ? Colors.white : Colors.white54,
+            color: isActive ? activeColor : inactiveColor,
             size: 24,
           ),
           const SizedBox(height: 6),
@@ -155,7 +167,44 @@ class MainScaffold extends StatelessWidget {
             height: 3,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: isActive ? Colors.white : Colors.transparent,
+              color: isActive ? activeColor : Colors.transparent,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildThemeToggle(bool isDark) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        AppTheme.toggleTheme();
+      },
+      behavior: HitTestBehavior.opaque,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 300),
+            transitionBuilder: (child, anim) => RotationTransition(
+              turns: anim,
+              child: FadeTransition(opacity: anim, child: child),
+            ),
+            child: Icon(
+              isDark ? CupertinoIcons.sun_max : CupertinoIcons.moon_fill,
+              key: ValueKey<bool>(isDark),
+              color: isDark ? const Color(0xFFFFD60A) : const Color(0xFF5E5CE6),
+              size: 22,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Container(
+            width: 3,
+            height: 3,
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.transparent,
             ),
           ),
         ],

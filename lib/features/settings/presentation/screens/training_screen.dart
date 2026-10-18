@@ -28,7 +28,7 @@ class _TrainingScreenState extends State<TrainingScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black, // True OLED Black
+      backgroundColor: AppTheme.surfaceDark,
       body: SafeArea(
         child: Column(
           children: [
@@ -108,7 +108,7 @@ class _TrainingScreenState extends State<TrainingScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.file_download_outlined, color: AppTheme.primaryColor, size: 64),
+              Icon(Icons.file_download_outlined, color: AppTheme.primaryColor, size: 64),
               const SizedBox(height: 48),
               Text(
                 'DATA SOVEREIGNTY',
@@ -138,14 +138,14 @@ class _TrainingScreenState extends State<TrainingScreen> {
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(vertical: 20),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: AppTheme.textPrimary,
                     borderRadius: BorderRadius.circular(100),
                   ),
                   child: Center(
                     child: Text(
                       'ACKNOWLEDGE',
                       style: GoogleFonts.inter(
-                        color: Colors.black,
+                        color: AppTheme.surfaceDark,
                         fontSize: 14,
                         fontWeight: FontWeight.w800,
                         letterSpacing: 2.0,

@@ -15,7 +15,7 @@ import com.intent.intent_app.db.entities.NotificationEntity;
  * Singleton configuration for the Intent fallback database.
  * Destructively replaces the legacy architecture on version 2 upgrade.
  */
-@Database(entities = {NotificationEntity.class}, version = 6, exportSchema = false)
+@Database(entities = {NotificationEntity.class}, version = 7, exportSchema = false)
 public abstract class IntentDatabase extends RoomDatabase {
 
     private static final String DB_NAME = "intent_database";
@@ -53,6 +53,16 @@ public abstract class IntentDatabase extends RoomDatabase {
         }
     };
 
+    static final Migration MIGRATION_6_7 = new Migration(6, 7) {
+        @Override
+        public void migrate(SupportSQLiteDatabase database) {
+            database.execSQL("CREATE INDEX IF NOT EXISTS index_notifications_timestamp ON notifications(timestamp)");
+            database.execSQL("CREATE INDEX IF NOT EXISTS index_notifications_category ON notifications(category)");
+            database.execSQL("CREATE INDEX IF NOT EXISTS index_notifications_package_name ON notifications(package_name)");
+            database.execSQL("CREATE INDEX IF NOT EXISTS index_notifications_category_timestamp ON notifications(category, timestamp)");
+        }
+    };
+
     public static IntentDatabase getInstance(Context context) {
         if (INSTANCE == null) {
             synchronized (IntentDatabase.class) {
@@ -62,8 +72,9 @@ public abstract class IntentDatabase extends RoomDatabase {
                             IntentDatabase.class,
                             DB_NAME
                     )
-                    .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
-                    .fallbackToDestructiveMigration() // Wipe the legacy V1 format safely
+                    .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+                    .fallbackToDestructiveMigrationFrom(1) // Only destructively wipe the obsolete V1 schema
+                    .fallbackToDestructiveMigrationOnDowngrade()
                     .build();
                 }
             }

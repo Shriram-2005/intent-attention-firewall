@@ -31,26 +31,41 @@ class _ExportScreenState extends State<ExportScreen> {
       lastDate: DateTime.now(),
       builder: (BuildContext context, Widget? child) {
         return Theme(
-          data: ThemeData.dark().copyWith(
-            scaffoldBackgroundColor: Colors.black, // Pure OLED
-            colorScheme: const ColorScheme.dark(
-              primary: Colors.white,
-              onPrimary: Colors.black,
-              surface: Colors.black,
-              onSurface: Colors.white,
-              secondary: Colors.white,
-              onSecondary: Colors.black,
-              secondaryContainer: Colors.white12,
-              primaryContainer: Colors.white12,
-              onPrimaryContainer: Colors.white,
-            ),
-            dialogBackgroundColor: Colors.black,
-            appBarTheme: const AppBarTheme(
-              backgroundColor: Colors.black,
-              iconTheme: IconThemeData(color: Colors.white),
-            ),
-            dividerTheme: const DividerThemeData(color: Colors.white12),
-          ),
+          data: AppTheme.isLight
+              ? ThemeData.light().copyWith(
+                  scaffoldBackgroundColor: AppTheme.surfaceDark,
+                  colorScheme: const ColorScheme.light(
+                    primary: Color(0xFF111111),
+                    onPrimary: Colors.white,
+                    surface: Colors.white,
+                    onSurface: Color(0xFF111111),
+                  ),
+                  dialogBackgroundColor: Colors.white,
+                  appBarTheme: const AppBarTheme(
+                    backgroundColor: Colors.white,
+                    iconTheme: IconThemeData(color: Color(0xFF111111)),
+                  ),
+                )
+              : ThemeData.dark().copyWith(
+                  scaffoldBackgroundColor: Colors.black, // Pure OLED
+                  colorScheme: const ColorScheme.dark(
+                    primary: Colors.white,
+                    onPrimary: Colors.black,
+                    surface: Colors.black,
+                    onSurface: Colors.white,
+                    secondary: Colors.white,
+                    onSecondary: Colors.black,
+                    secondaryContainer: Colors.white12,
+                    primaryContainer: Colors.white12,
+                    onPrimaryContainer: Colors.white,
+                  ),
+                  dialogBackgroundColor: Colors.black,
+                  appBarTheme: const AppBarTheme(
+                    backgroundColor: Colors.black,
+                    iconTheme: IconThemeData(color: Colors.white),
+                  ),
+                  dividerTheme: const DividerThemeData(color: Colors.white12),
+                ),
           child: child!,
         );
       },

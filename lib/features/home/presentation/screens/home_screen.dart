@@ -187,12 +187,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        const Icon(CupertinoIcons.lock_shield, color: Colors.white24, size: 64),
+        Icon(CupertinoIcons.lock_shield, color: AppTheme.textSecondary, size: 64),
         const SizedBox(height: 24),
         Text(
           'ACCESS REQUIRED',
           style: GoogleFonts.inter(
-            color: Colors.white,
+            color: AppTheme.textPrimary,
             fontSize: 20,
             fontWeight: FontWeight.w300,
             letterSpacing: 2.0,
@@ -203,7 +203,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           'Intent Engine needs OS permission to intercept and analyze notifications locally.',
           textAlign: TextAlign.center,
           style: GoogleFonts.inter(
-            color: Colors.white54,
+            color: AppTheme.textSecondary,
             fontSize: 14,
             height: 1.5,
           ),
@@ -217,15 +217,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 20),
             decoration: BoxDecoration(
-              color: Colors.black, // True Black
-              border: Border.all(color: Colors.white, width: 1), // White 1px border
+              color: AppTheme.surfaceElevated,
+              border: Border.all(color: AppTheme.surfaceBorder, width: 1),
               borderRadius: BorderRadius.circular(16),
             ),
             alignment: Alignment.center,
             child: Text(
               'ACTIVATE INTENT ENGINE',
               style: GoogleFonts.inter(
-                color: Colors.white,
+                color: AppTheme.textPrimary,
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
                 letterSpacing: 2.0,
@@ -248,7 +248,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           categoryIndex: 0,
         ),
         const SizedBox(height: 32),
-        const Divider(color: AppTheme.surfaceBorder, thickness: 1),
+        Divider(color: AppTheme.surfaceBorder, thickness: 1),
         const SizedBox(height: 32),
         _buildDataRow(
           label: 'BUFFER',
@@ -257,7 +257,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           categoryIndex: 1,
         ),
         const SizedBox(height: 32),
-        const Divider(color: AppTheme.surfaceBorder, thickness: 1),
+        Divider(color: AppTheme.surfaceBorder, thickness: 1),
         const SizedBox(height: 32),
         _buildDataRow(
           label: 'BLOCKED',

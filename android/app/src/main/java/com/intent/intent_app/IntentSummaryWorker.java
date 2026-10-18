@@ -48,6 +48,10 @@ public class IntentSummaryWorker extends Worker {
         if (retentionDays > 0) {
             long thresholdMillis = System.currentTimeMillis() - (retentionDays * 24L * 60L * 60L * 1000L);
             dao.deleteHistoryBefore(thresholdMillis);
+        } else {
+            // Safety cap: prevent unbounded SQLite disk growth if user never set a policy
+            long defaultSafetyCapMillis = System.currentTimeMillis() - (90L * 24L * 60L * 60L * 1000L);
+            dao.deleteHistoryBefore(defaultSafetyCapMillis);
         }
         // -----------------------------------
 
