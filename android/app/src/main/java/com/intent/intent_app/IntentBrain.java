@@ -258,6 +258,11 @@ public class IntentBrain {
                     String[] items = inner.split(",");
                     for (String item : items) {
                         String trimmed = item.trim().toLowerCase();
+                        if (trimmed.startsWith("\"") && trimmed.endsWith("\"") && trimmed.length() >= 2) {
+                            trimmed = trimmed.substring(1, trimmed.length() - 1).trim();
+                        } else if (trimmed.startsWith("'") && trimmed.endsWith("'") && trimmed.length() >= 2) {
+                            trimmed = trimmed.substring(1, trimmed.length() - 1).trim();
+                        }
                         if (!trimmed.isEmpty()) list.add(trimmed);
                     }
                     return list;
@@ -269,6 +274,11 @@ public class IntentBrain {
                 String[] items = content.split("[,\\n]+");
                 for (String item : items) {
                     String trimmed = item.trim().toLowerCase();
+                    if (trimmed.startsWith("\"") && trimmed.endsWith("\"") && trimmed.length() >= 2) {
+                        trimmed = trimmed.substring(1, trimmed.length() - 1).trim();
+                    } else if (trimmed.startsWith("'") && trimmed.endsWith("'") && trimmed.length() >= 2) {
+                        trimmed = trimmed.substring(1, trimmed.length() - 1).trim();
+                    }
                     if (!trimmed.isEmpty()) list.add(trimmed);
                 }
                 return list;
@@ -341,10 +351,11 @@ public class IntentBrain {
     // Requires explicit OTP terminology (one-time passcode, verification code, auth pin, etc.)
     // Does NOT match generic promotional numbers ("use code 2025") or years ("is 2024")
     private static final java.util.regex.Pattern STRICT_OTP_PATTERN = java.util.regex.Pattern.compile(
-        "(?i)\\b(?:one[- ]?time\\s*(?:pass(?:word|code)?|pin)|otp|verification\\s*(?:code|pin)|auth(?:entication)?\\s*(?:code|pin)|security\\s*(?:code|pin)|login\\s*(?:code|pin)|2fa\\s*code)\\b[:\\s#\\-]*[0-9]{4,8}\\b|" +
-        "(?i)\\b[0-9]{4,8}\\s+(?:is\\s+(?:your\\s+)?)?(?:one[- ]?time\\s*(?:pass(?:word|code)?|pin)|otp|verification\\s*(?:code|pin)|auth(?:entication)?\\s*(?:code|pin)|security\\s*(?:code|pin)|login\\s*(?:code|pin)|2fa\\s*code)\\b|" +
-        "(?i)(?:\\b(?:otp|passcode|verification\\s*code)\\b.*?(?:\\b[0-9]{4,8}\\b).*?\\b(?:do\\s*not\\s*share|don'?t\\s*share|never\\s*share|valid\\s*for)\\b)|" +
-        "(?i)(?:\\b(?:do\\s*not\\s*share|don'?t\\s*share|never\\s*share)\\b.*?(?:\\b[0-9]{4,8}\\b).*?\\b(?:otp|passcode|verification\\s*code)\\b)"
+        "(?i)\\b(?:one[- ]?time\\s*(?:pass(?:word|code)?|pin)|otp|verification(?:\\s*(?:code|pin))?|auth(?:entication)?\\s*(?:code|pin)|security\\s*(?:code|pin)|login\\s*(?:code|pin)|2fa\\s*code|passcode)\\s*(?:is\\s*[:]?|[:#\\-]+)\\s*[0-9]{4,8}\\b|" +
+        "(?i)\\byour\\s+(?:[a-zA-Z0-9_\\-]+\\s+){0,3}(?:code|otp|pin|passcode|pass(?:word)?)\\s*(?:is\\s*[:]?|[:#\\-]+)\\s*[0-9]{4,8}\\b|" +
+        "(?i)\\b[0-9]{4,8}\\s+(?:is|as)\\s+(?:your\\s+)?(?:[a-zA-Z0-9_\\-]+\\s+){0,3}(?:code|otp|pin|passcode|password|verification|auth(?:entication)?)\\b|" +
+        "(?i)(?:\\b(?:otp|passcode|verification\\s*code|security\\s*code)\\b.*?(?:\\b[0-9]{4,8}\\b).*?\\b(?:do\\s*not\\s*share|don'?t\\s*share|never\\s*share|valid\\s*for)\\b)|" +
+        "(?i)(?:\\b(?:do\\s*not\\s*share|don'?t\\s*share|never\\s*share)\\b.*?(?:\\b[0-9]{4,8}\\b).*?\\b(?:otp|passcode|verification\\s*code|security\\s*code)\\b)"
     );
 
     // Requires explicit transaction indicators with account/card reference or currency symbol

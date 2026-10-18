@@ -58,12 +58,19 @@ public class IntentBrainTest {
         assertTrue(IntentBrain.isOtp("Your one-time password is 482913. Do not share."));
         assertTrue(IntentBrain.isOtp("482913 is your verification code to log in. Do not share it."));
         assertTrue(IntentBrain.isOtp("Your Google verification code is 849201"));
+        assertTrue(IntentBrain.isOtp("Your verification code is: 849201"));
+        assertTrue(IntentBrain.isOtp("Your WhatsApp code: 849201"));
         assertTrue(IntentBrain.isOtp("Your login OTP is 392810. Valid for 5 minutes."));
         assertTrue(IntentBrain.isOtp("Use 948123 as your authentication code"));
+        assertTrue(IntentBrain.isOtp("Your OTP is: 123456"));
+        assertTrue(IntentBrain.isOtp("Your code is 123456"));
+        assertTrue(IntentBrain.isOtp("Your Uber code: 5821"));
 
         // Evaluate heuristics directly
         assertEquals(0, IntentBrain.evaluateHeuristics("Your one-time password is 482913", null, null, null, null));
         assertEquals(0, IntentBrain.evaluateHeuristics("482913 is your verification code to log in. Do not share it.", null, null, null, null));
+        assertEquals(0, IntentBrain.evaluateHeuristics("Your Google verification code is: 849201", null, null, null, null));
+        assertEquals(0, IntentBrain.evaluateHeuristics("Your WhatsApp code: 849201", null, null, null, null));
     }
 
     // ── 3. REAL PRODUCTION TEST: True Financial & Emergency Alerts ─────────

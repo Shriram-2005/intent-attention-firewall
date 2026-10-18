@@ -13,21 +13,21 @@ public class HeuristicDictionary {
         // Core list of ~150+ ultra-high fidelity emergency/utility keywords. 
         // Optimized strictly natively to operate within 0.1ms using HashSet hashing logic.
         SYSTEM_URGENT_KEYWORDS = new HashSet<>(Arrays.asList(
-            "otp", "verification", "code", "password", "reset", "security", "alert", "login", 
+            "otp", "verification", "password", "reset", "security", "alert", "login", 
             "unauthorized", "breach", "compromised", "lock", "unlock", "authenticate", "pin", 
             "2fa", "mfa", "token", "passcode", "identity",
-            "hospital", "emergency", "doctor", "police", "ambulance", "accident", "dying", 
+            "emergency", "police", "ambulance", "accident", "dying", 
             "urgent", "asap", "immediate", "critical", "severe", "fatal", "injury", "bleeding",
-            "surgery", "icu", "ward", "clinic", "prescription",
+            "surgery", "icu", "ward", "prescription",
             "flight", "boarding", "gate", "departure", "delay", "cancelled", "terminal", "airport",
-            "train", "platform", "arriving", "uber", "lyft", "driver", "transit", "delivery", 
-            "package", "courier", "dropped", "location", "pickup", "dropoff",
-            "payment", "declined", "transfer", "received", "deducted", "overdraft", "fraud", 
+            "train", "platform", "arriving", "uber", "lyft", "driver", "transit", 
+            "package", "dropped", "location", "pickup", "dropoff",
+            "declined", "transfer", "received", "deducted", "overdraft", "fraud", 
             "suspicious", "charge", "refund", "invoice", "receipt", "salary", "credited", 
             "debited", "wire", "deposit", "insufficient", "balance",
             "meeting", "interview", "schedule", "rescheduled", "boss", "manager", "client", 
-            "deadline", "presentation", "zoom", "teams", "link", "join", "agenda", "brief", 
-            "fyi", "memo", "urgent", "review",
+            "deadline", "presentation", "zoom", "teams", "link", "agenda", "brief", 
+            "fyi", "memo", "urgent",
             "dad", "mom", "wife", "husband", "son", "daughter", "brother", "sister", 
             "family", "kid", "school", "principal", "teacher", "class"
         ));
