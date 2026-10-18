@@ -226,6 +226,10 @@ public class IntentBrainTest {
         String rawDad = "Dad - are you back home?";
         String promoMentioningMom = "Mother's Day sale! Buy a gift for your mom with code LOVE";
 
+        // Promotional notifications mentioning "Mom" or "Son" in body or title must NEVER be Urgent (0)
+        String flipkartPromo = "Flipkart. Sale. Mom. Shop today and save big";
+        String cultPromo = "Cult. Cult. Son: this week's new arrivals, shop now";
+
         // Family senders must be Urgent (0) by deliberate product design in BOTH production format and raw format
         assertTrue(IntentBrain.isFamilySender(prodMom1));
         assertTrue(IntentBrain.isFamilySender(prodMom2));
@@ -234,6 +238,8 @@ public class IntentBrainTest {
         assertTrue(IntentBrain.isFamilySender(rawMom));
         assertTrue(IntentBrain.isFamilySender(rawDad));
         assertFalse(IntentBrain.isFamilySender(promoMentioningMom));
+        assertFalse(IntentBrain.isFamilySender(flipkartPromo));
+        assertFalse(IntentBrain.isFamilySender(cultPromo));
 
         assertEquals(0, IntentBrain.evaluateHeuristics(prodMom1, null, null, null, null));
         assertEquals(0, IntentBrain.evaluateHeuristics(prodMom2, null, null, null, null));
@@ -242,11 +248,51 @@ public class IntentBrainTest {
         assertEquals(0, IntentBrain.evaluateHeuristics(rawMom, null, null, null, null));
         assertEquals(0, IntentBrain.evaluateHeuristics(rawDad, null, null, null, null));
 
-        // Promo mentioning "mom" in body MUST NOT be Urgent (0)
+        // Promo mentioning "mom" in body or title MUST NOT be Urgent (0)
         assertNotEquals(0, IntentBrain.evaluateHeuristics(promoMentioningMom, null, null, null, null));
+        assertNotEquals(0, IntentBrain.evaluateHeuristics(flipkartPromo, null, null, null, null));
+        assertNotEquals(0, IntentBrain.evaluateHeuristics(cultPromo, null, null, null, null));
+
+        // Detailed classification checks
+        IntentBrain.ClassificationResult resFlipkart = IntentBrain.evaluateHeuristicsDetailed(flipkartPromo, "Sale", false, null, null, null, null);
+        assertNotEquals(0, resFlipkart.category);
+        assertNotEquals("FAMILY", resFlipkart.source);
+
+        IntentBrain.ClassificationResult resCult = IntentBrain.evaluateHeuristicsDetailed(cultPromo, "Cult", false, null, null, null, null);
+        assertNotEquals(0, resCult.category);
+        assertNotEquals("FAMILY", resCult.source);
+
+        IntentBrain.ClassificationResult resMom = IntentBrain.evaluateHeuristicsDetailed(prodMom1, "Mom", true, null, null, null, null);
+        assertEquals(0, resMom.category);
+        assertEquals("FAMILY", resMom.source);
     }
 
-    // ── 10. REAL PRODUCTION TEST: ML Model & Vocab Asset Integrity ───────────
+    // ── 10. REAL PRODUCTION TEST: User Explicit Block Honored in Direct Messages
+    @Test
+    public void testProductionClassifier_UserBlockHonoredEvenInDirectMessages() {
+        java.util.List<String> blockList = java.util.Arrays.asList("spambot", "cryptocurrency");
+
+        // WhatsApp direct message from a user-blocked sender
+        String blockedChat = "WhatsApp. SpamBot. Join our cryptocurrency pump now";
+        IntentBrain.ClassificationResult blockedRes = IntentBrain.evaluateHeuristicsDetailed(
+            blockedChat, "SpamBot", true, null, null, null, blockList
+        );
+
+        // MUST be Spam (2), with source "USER_BLOCK", and isUserExplicitRule == true
+        assertEquals(2, blockedRes.category);
+        assertEquals("USER_BLOCK", blockedRes.source);
+        assertTrue("User explicit block rule must be marked as explicit rule", blockedRes.isUserExplicitRule);
+
+        // A legitimate chat without user block must NOT be marked as an explicit user block rule
+        String regularChat = "WhatsApp. Ravi. Can you book a table, we can save money tonight?";
+        IntentBrain.ClassificationResult regularRes = IntentBrain.evaluateHeuristicsDetailed(
+            regularChat, "Ravi", true, null, null, null, blockList
+        );
+        assertFalse("Regular chat is not a user explicit block rule", regularRes.isUserExplicitRule);
+        assertNotEquals("Regular chat must not be Spam (2)", 2, regularRes.category);
+    }
+
+    // ── 11. REAL PRODUCTION TEST: ML Model & Vocab Asset Integrity ───────────
     @Test
     public void testProductionClassifier_MlAssetsIntegrity() {
         java.io.File tfliteFile = new java.io.File("src/main/assets/lstm.tflite");

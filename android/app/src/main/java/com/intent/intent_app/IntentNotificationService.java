@@ -238,16 +238,6 @@ public class IntentNotificationService extends NotificationListenerService {
             String readablePackage = getReadablePackageName(packageName);
             String fullContext = readablePackage + ". " + title + ". " + text;
 
-            // 3. AI Pipeline
-            long inferenceStartMs = System.currentTimeMillis();
-            int classification = intentBrain.classifyNotification(fullContext);
-            long inferenceLatency = System.currentTimeMillis() - inferenceStartMs;
-
-            if (classification == -2) {
-                Log.i(TAG, "Absolute VIP Bypass Interception: Handing entirely to OS.");
-                return;
-            }
-
             // 1. Direct Peer-to-Peer Message Detection (WhatsApp, SMS, Telegram, Signal, DMs)
             boolean isDirectMessage = Notification.CATEGORY_MESSAGE.equals(notification.category) ||
                                       Notification.CATEGORY_CALL.equals(notification.category) ||
@@ -255,15 +245,37 @@ public class IntentNotificationService extends NotificationListenerService {
                                       extras.containsKey("android.people.list") ||
                                       hasInlineReplyAction(notification);
 
-            // Peer-to-peer personal messages MUST NEVER be auto-cancelled as SPAM (2)!
-            // Even if the ML model or adaptive feedback classified it as Spam,
-            // direct personal communications are downgraded to Buffer (1) / Vault so they are never wiped!
+            // 3. AI Pipeline
+            long inferenceStartMs = System.currentTimeMillis();
+            IntentBrain.ClassificationResult result = intentBrain.classify(fullContext, title, isDirectMessage);
+            int classification = result.category;
+            long inferenceLatency = System.currentTimeMillis() - inferenceStartMs;
+
+            if (classification == -2) {
+                Log.i(TAG, "Absolute VIP Bypass Interception: Handing entirely to OS.");
+                return;
+            }
+
+            // User's Explicit Block / Spam Rules MUST BE HONORED!
+            // If the user explicitly added this sender/phrase to their Block list in settings,
+            // cancel and wipe it immediately, EVEN IF it is a direct message (WhatsApp, SMS, etc.)!
+            if (classification == 2 && result.isUserExplicitRule) {
+                cancelNotification(sbn.getKey());
+                Log.i(TAG, "USER EXPLICIT BLOCK -> Wiping notification from " + packageName + " (User Block Rule Honored)");
+                if (!isGroupSummary) {
+                    logToDatabase(packageName, title, text, 2, interceptTimestamp, inferenceLatency, 1.0f);
+                }
+                return;
+            }
+
+            // Peer-to-peer personal messages MUST NEVER be auto-cancelled as SPAM (2) by ML or generic heuristics!
+            // Direct personal communications are downgraded to Buffer (1) / Vault so they are never wiped!
             if (isDirectMessage && classification == 2) {
-                Log.i(TAG, "Direct personal message detected for " + packageName + " -> Downgrading Spam to Buffer (never wipe chats).");
+                Log.i(TAG, "Direct personal message detected for " + packageName + " -> Downgrading ML/Heuristic Spam to Buffer (never wipe chats).");
                 classification = 1;
             }
 
-            // 2. Non-Chat Spam Cancellation
+            // Non-Chat / Generic Spam Cancellation
             if (classification == 2) {
                 cancelNotification(sbn.getKey());
                 Log.i(TAG, "BLOCKED (Spam) -> Wiping notification from " + packageName);

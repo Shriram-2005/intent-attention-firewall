@@ -131,7 +131,24 @@ public class IntentBrain {
         return tokenized;
     }
 
-    public int classifyNotification(String text) {
+    public static class ClassificationResult {
+        public final int category; // -2 (VIP), 0 (Urgent), 1 (Buffer), 2 (Spam), -1 (Unmatched)
+        public final String source; // "USER_VIP", "USER_BLOCK", "USER_BUFFER", "USER_URGENT", "FAMILY", "OTP", "FINANCIAL", "CRITICAL_SERVICE", "PROMOTIONAL", "SYSTEM_URGENT", "SYSTEM_BLOCK", "SYSTEM_BUFFER", "NEURAL", "FALLBACK"
+        public final boolean isUserExplicitRule;
+
+        public ClassificationResult(int category, String source, boolean isUserExplicitRule) {
+            this.category = category;
+            this.source = source;
+            this.isUserExplicitRule = isUserExplicitRule;
+        }
+
+        @Override
+        public String toString() {
+            return "ClassificationResult{category=" + category + ", source='" + source + "', isUserExplicitRule=" + isUserExplicitRule + "}";
+        }
+    }
+
+    public ClassificationResult classify(String text, String sender, boolean isDirectMessage) {
         try {
             // 1. Check Engine Selection from Flutter UI safely
             SharedPreferences prefs = mContext.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE);
@@ -148,60 +165,73 @@ public class IntentBrain {
             } catch (Exception parseE) {
                 Log.w(TAG, "Could not strict-cast engine_type, defaulting to Neural.", parseE);
             }
-            
-            int heuristicResult = executeHeuristicMatching(text, prefs);
-            
-            if (heuristicResult == -2) return -2; // VIP Strict Bypass
-            
+
+            java.util.ArrayList<String> rawAbsoluteVipList = cachedAbsoluteVip != null ? cachedAbsoluteVip : parseFlutterListSafely(prefs.getAll().get("flutter.absolute_vip_keywords"));
+            java.util.ArrayList<String> rawUrgentList = cachedUrgent != null ? cachedUrgent : parseFlutterListSafely(prefs.getAll().get("flutter.urgent_keywords"));
+            java.util.ArrayList<String> rawBufferList = cachedBuffer != null ? cachedBuffer : parseFlutterListSafely(prefs.getAll().get("flutter.buffer_keywords"));
+            java.util.ArrayList<String> rawSpamList = cachedSpam != null ? cachedSpam : parseFlutterListSafely(prefs.getAll().get("flutter.block_keywords"));
+
+            ClassificationResult heuristicResult = evaluateHeuristicsDetailed(
+                text, sender, isDirectMessage, rawAbsoluteVipList, rawUrgentList, rawBufferList, rawSpamList
+            );
+
+            if (heuristicResult.category == -2) return heuristicResult; // VIP Strict Bypass
+
             if (engineType == 0) {
                 // RUN EXPLICIT HEURISTIC ENGINE ONLY
-                return heuristicResult == -1 ? 1 : heuristicResult; // 1 (Buffer) is the final safe fallback if heuristic returns -1
+                if (heuristicResult.category == -1) {
+                    return new ClassificationResult(1, "HEURISTIC_FALLBACK", false);
+                }
+                return heuristicResult;
             }
 
             // RUN NEURAL TFLITE HYBRID ENGINE
-            // 1. If Heuristics explicitly matched ANY of the 6 core arrays, trust it and override ML!
-            if (heuristicResult != -1) {
+            // 1. If Heuristics explicitly matched ANY category, trust it and override ML!
+            if (heuristicResult.category != -1) {
                 return heuristicResult;
             }
 
             // 2. If Heuristics couldn't confidently place it, invoke ML inference!
             if (!isInitialized || tflite == null) {
                 Log.e(TAG, "Inference attempted but LSTM is not initialized. Defaulting to Buffer (1).");
-                return 1; // Failsafe to Buffer to protect data
+                return new ClassificationResult(1, "NEURAL_UNINITIALIZED", false);
             }
 
             float[][] input = tokenize(text);
             float[][] output = new float[1][3]; // [Urgent, Buffer, Spam]
-            
+
             tflite.run(input, output);
 
             // Find max probability index (ArgMax)
             float maxProb = -1.0f;
             int maxIndex = -1;
-            
+
             for (int i = 0; i < 3; i++) {
                 if (output[0][i] > maxProb) {
                     maxProb = output[0][i];
                     maxIndex = i;
                 }
             }
-            
-            
+
             Log.d(TAG, "Classification Result - Index: " + maxIndex + ", Confidence: " + maxProb);
-            
+
             // Safety Check: If the Neural Engine is not highly confident, 
             // always default to Buffer so the user can see and review it manually.
             if (maxProb < 0.70f) {
                 Log.d(TAG, "Neural confidence below 0.70 threshold. Defaulting to Buffer (1).");
-                return 1;
+                return new ClassificationResult(1, "NEURAL_LOW_CONFIDENCE", false);
             }
-            
-            return maxIndex;
+
+            return new ClassificationResult(maxIndex, "NEURAL", false);
 
         } catch (Exception e) {
             Log.e(TAG, "CRITICAL: Error during notification classification! Forcing BUFFER.", e);
-            return 1; // Failsafe to Buffer on crash to prevent data loss
+            return new ClassificationResult(1, "EXCEPTION_FALLBACK", false);
         }
+    }
+
+    public int classifyNotification(String text) {
+        return classify(text, null, false).category;
     }
 
     /**
@@ -388,9 +418,6 @@ public class IntentBrain {
         "(?i)\\b(?:buy\\s+[0-9]+\\s+get\\s+[0-9]+\\s+free|free\\s+(?:shipping|delivery)\\s+on\\s+orders)\\b"
     );
 
-    private static final java.util.Set<String> FAMILY_RELATIONS = new java.util.HashSet<>(java.util.Arrays.asList(
-        "mom", "dad", "mother", "father", "wife", "husband", "son", "daughter", "brother", "sister"
-    ));
 
     static boolean isOtp(String text) {
         if (text == null) return false;
@@ -412,43 +439,82 @@ public class IntentBrain {
         return STRICT_PROMOTIONAL_PATTERN.matcher(text).find();
     }
 
-    private static final java.util.regex.Pattern FAMILY_SENDER_PATTERN = java.util.regex.Pattern.compile(
-        "(?i)(?:^|[\\.\\:\\-]\\s*)\\b(?:mom|dad|mother|father|wife|husband|son|daughter|brother|sister)\\b\\s*[\\.\\:\\-]"
+    private static final java.util.Set<String> FAMILY_RELATIONS = new java.util.HashSet<>(java.util.Arrays.asList(
+        "mom", "dad", "mother", "father", "wife", "husband", "son", "daughter", "brother", "sister"
+    ));
+
+    private static final java.util.regex.Pattern DIRECT_MSG_APP_FAMILY_PATTERN = java.util.regex.Pattern.compile(
+        "(?i)^(?:whatsapp|messages|telegram|signal|messenger|sms|google\\s+chat)\\.\\s*(?:mom|dad|mother|father|wife|husband|son|daughter|brother|sister)(?:\\s+[a-zA-Z0-9]+)?\\.\\s*.*$"
     );
 
-    /**
-     * Identifies immediate family senders deliberately in both raw format ("Mom: did you eat?")
-     * and production service format ("WhatsApp. Mom. did you eat?").
-     * Deliberate product decision ensuring family communication is treated as Urgent (0)
-     * without falsely triggering on promotional copy mentioning "mom" or "sister" in body text.
-     */
-    static boolean isFamilySender(String text) {
-        if (text == null || text.trim().isEmpty()) return false;
-        String trimmed = text.trim();
-        for (String r : FAMILY_RELATIONS) {
-            if (trimmed.equalsIgnoreCase(r)) return true;
+    private static final java.util.regex.Pattern RAW_FAMILY_SENDER_PATTERN = java.util.regex.Pattern.compile(
+        "(?i)^(?:mom|dad|mother|father|wife|husband|son|daughter|brother|sister)(?:\\s+[a-zA-Z0-9]+)?\\s*[:\\-]\\s*.*$"
+    );
+
+    public static boolean isFamilyRelation(String name) {
+        if (name == null || name.trim().isEmpty()) return false;
+        String trimmed = name.trim().toLowerCase();
+        for (String rel : FAMILY_RELATIONS) {
+            if (trimmed.equals(rel) || trimmed.startsWith(rel + " ") || trimmed.endsWith(" " + rel)) {
+                return true;
+            }
         }
-        return FAMILY_SENDER_PATTERN.matcher(trimmed).find();
+        return false;
     }
 
     /**
-     * Core heuristic evaluation with strict precedence:
-     * 1. Absolute VIP (-2)
-     * 2. User Block/Spam List (2) - User's explicit block takes precedence over generic patterns
-     * 3. User Buffer List (1) - User's explicit buffer rules
-     * 4. User Urgent List (0) - User's explicit urgent rules
-     * 5. High-confidence Mission-Critical Detection (OTP, Financial, Emergency) (0)
-     * 6. System Dictionaries
-     * 7. Fallback (-1)
+     * The family urgency rule applies strictly to the SENDER of a direct message.
+     * It NEVER matches promotional body copy or titles from shopping/fitness/other apps
+     * (e.g. "Flipkart. Sale. Mom. Shop today and save big" or "Cult. Cult. Son: this week's new arrivals").
      */
-    static int evaluateHeuristics(
+    public static boolean isFamilyDirectMessage(String sender, boolean isDirectMessage, String text) {
+        // 1. If explicit sender and isDirectMessage are provided from Android Notification extras:
+        if (isDirectMessage && isFamilyRelation(sender)) {
+            return true;
+        }
+
+        // 2. If parsing from text context (for unit tests or when fullContext is evaluated alone):
+        if (text != null && !text.isEmpty()) {
+            String trimmed = text.trim();
+            // Match production format from known messaging apps: "WhatsApp. Mom. did you eat?"
+            if (DIRECT_MSG_APP_FAMILY_PATTERN.matcher(trimmed).matches()) {
+                return true;
+            }
+            // Match raw direct message format: "Mom: did you eat?"
+            if (RAW_FAMILY_SENDER_PATTERN.matcher(trimmed).matches()) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public static boolean isFamilySender(String text) {
+        return isFamilyDirectMessage(null, false, text);
+    }
+
+    /**
+     * Core heuristic evaluation returning detailed ClassificationResult:
+     * 1. Absolute VIP (-2, "USER_VIP", true)
+     * 2. User Block/Spam List (2, "USER_BLOCK", true) - Explicit user block rule takes absolute precedence!
+     * 3. User Buffer List (1, "USER_BUFFER", true)
+     * 4. User Urgent List (0, "USER_URGENT", true)
+     * 5. Deliberate Family Urgency (0, "FAMILY", false) - SENDER of direct message ONLY
+     * 6. High-confidence Mission-Critical Detection (OTP, Financial, Emergency) (0, ..., false)
+     * 7. Promotional copy -> Buffer (1, "PROMOTIONAL", false)
+     * 8. System Dictionaries (0 or 1, ..., false)
+     * 9. Fallback (-1, "FALLBACK", false)
+     */
+    public static ClassificationResult evaluateHeuristicsDetailed(
             String text,
+            String sender,
+            boolean isDirectMessage,
             java.util.List<String> rawAbsoluteVipList,
             java.util.List<String> rawUrgentList,
             java.util.List<String> rawBufferList,
             java.util.List<String> rawSpamList) {
 
-        if (text == null || text.trim().isEmpty()) return -1;
+        if (text == null || text.trim().isEmpty()) return new ClassificationResult(-1, "EMPTY", false);
         String rawLowerText = text.toLowerCase();
 
         // 1. Absolute VIP Check with Word Boundary and Phone Normalization
@@ -457,21 +523,21 @@ public class IntentBrain {
                 if (vipContext.length() >= 2) {
                     if (isPhoneNumber(vipContext)) {
                         if (matchesPhoneInText(text, vipContext)) {
-                            return -2; // VIP Strict Bypass
+                            return new ClassificationResult(-2, "USER_VIP", true);
                         }
                     } else if (containsWord(text, vipContext)) {
-                        return -2; // VIP Strict Bypass
+                        return new ClassificationResult(-2, "USER_VIP", true);
                     }
                 }
             }
         }
 
         // 2. User Explicit Block/Spam Rules - USER PREFERENCE PRECEDENCE
-        // An explicit user block rule (e.g. promo keyword or package) MUST NOT be overridden by generic pattern matches!
+        // An explicit user block rule MUST NOT be overridden by downstream chat protections!
         if (rawSpamList != null) {
             for (String spamPhrase : rawSpamList) {
                 if (spamPhrase.length() >= 2 && containsWord(text, spamPhrase)) {
-                    return 2; // User Block/Spam
+                    return new ClassificationResult(2, "USER_BLOCK", true);
                 }
             }
         }
@@ -480,7 +546,7 @@ public class IntentBrain {
         if (rawBufferList != null) {
             for (String bufferPhrase : rawBufferList) {
                 if (bufferPhrase.length() >= 2 && containsWord(text, bufferPhrase)) {
-                    return 1; // User Buffer
+                    return new ClassificationResult(1, "USER_BUFFER", true);
                 }
             }
         }
@@ -491,35 +557,34 @@ public class IntentBrain {
                 if (urgentContext.length() >= 2) {
                     if (isPhoneNumber(urgentContext)) {
                         if (matchesPhoneInText(text, urgentContext)) {
-                            return 0; // User Urgent
+                            return new ClassificationResult(0, "USER_URGENT", true);
                         }
                     } else if (containsWord(text, urgentContext)) {
-                        return 0; // User Urgent
+                        return new ClassificationResult(0, "USER_URGENT", true);
                     }
                 }
             }
         }
 
-        // 5. Deliberate Family Urgency: Immediate family senders (e.g. "Mom: did you eat?", "Dad: are you back home?")
-        if (isFamilySender(text)) {
-            return 0; // Urgent by deliberate product design
+        // 5. Deliberate Family Urgency: Immediate family senders of direct messages ONLY
+        if (isFamilyDirectMessage(sender, isDirectMessage, text)) {
+            return new ClassificationResult(0, "FAMILY", false);
         }
 
         // 5.1 System Zero-Drop Protection for verified OTP, Financial transactions & Emergencies
         if (isOtp(text)) {
-            return 0; // Urgent OTP
+            return new ClassificationResult(0, "OTP", false);
         }
         if (isFinancial(text)) {
-            return 0; // Urgent Financial Alert
+            return new ClassificationResult(0, "FINANCIAL", false);
         }
         if (isCriticalService(text)) {
-            return 0; // Urgent Delivery / Emergency Dispatch
+            return new ClassificationResult(0, "CRITICAL_SERVICE", false);
         }
 
         // 5.2 High-Confidence Promotional Copy Detection -> Route to Buffer (1) / Vault
-        // Promos never ring as Urgent (0) and are never wiped as Spam (2) unless user explicitly blocked them.
         if (isPromotional(text)) {
-            return 1; // Buffer
+            return new ClassificationResult(1, "PROMOTIONAL", false);
         }
 
         // 6. Tokenization for System Dictionaries
@@ -530,16 +595,15 @@ public class IntentBrain {
         for (String word : notificationWords) {
             if (word.isEmpty()) continue;
             if (com.intent.intent_app.HeuristicDictionary.SYSTEM_URGENT_KEYWORDS.contains(word)) {
-                return 0; // Urgent
+                return new ClassificationResult(0, "SYSTEM_URGENT", false);
             }
         }
 
         // Sweep 2: System Blocked Heuristics -> Route to Vault (Buffer), NEVER auto-cancel!
-        // Only explicit user rules (Step 2) are permitted to return 2 (Spam/Cancel).
         for (String word : notificationWords) {
             if (word.isEmpty()) continue;
             if (com.intent.intent_app.HeuristicDictionary.SYSTEM_BLOCKED_KEYWORDS.contains(word)) {
-                return 1; // Route to Vault (Buffer)
+                return new ClassificationResult(1, "SYSTEM_BLOCK", false);
             }
         }
 
@@ -547,20 +611,20 @@ public class IntentBrain {
         for (String word : notificationWords) {
             if (word.isEmpty()) continue;
             if (com.intent.intent_app.HeuristicDictionary.SYSTEM_BUFFER_KEYWORDS.contains(word)) {
-                return 1; // Buffer
+                return new ClassificationResult(1, "SYSTEM_BUFFER", false);
             }
         }
 
-        return -1; // Forward to ML or default safe Buffer
+        return new ClassificationResult(-1, "FALLBACK", false);
     }
 
-    private int executeHeuristicMatching(String text, SharedPreferences prefs) {
-        java.util.ArrayList<String> rawAbsoluteVipList = cachedAbsoluteVip != null ? cachedAbsoluteVip : parseFlutterListSafely(prefs.getAll().get("flutter.absolute_vip_keywords"));
-        java.util.ArrayList<String> rawUrgentList = cachedUrgent != null ? cachedUrgent : parseFlutterListSafely(prefs.getAll().get("flutter.urgent_keywords"));
-        java.util.ArrayList<String> rawBufferList = cachedBuffer != null ? cachedBuffer : parseFlutterListSafely(prefs.getAll().get("flutter.buffer_keywords"));
-        java.util.ArrayList<String> rawSpamList = cachedSpam != null ? cachedSpam : parseFlutterListSafely(prefs.getAll().get("flutter.block_keywords"));
-
-        return evaluateHeuristics(text, rawAbsoluteVipList, rawUrgentList, rawBufferList, rawSpamList);
+    public static int evaluateHeuristics(
+            String text,
+            java.util.List<String> rawAbsoluteVipList,
+            java.util.List<String> rawUrgentList,
+            java.util.List<String> rawBufferList,
+            java.util.List<String> rawSpamList) {
+        return evaluateHeuristicsDetailed(text, null, false, rawAbsoluteVipList, rawUrgentList, rawBufferList, rawSpamList).category;
     }
 }
 

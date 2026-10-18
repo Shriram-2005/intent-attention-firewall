@@ -110,6 +110,7 @@ dependencies {
 
     // TensorFlow Lite
     implementation("org.tensorflow:tensorflow-lite:2.16.1")
+    implementation("org.tensorflow:tensorflow-lite-select-tf-ops:2.16.1")
 
     // ── Gson (JSON serialization) ─────────────────────────────────────────
     implementation("com.google.code.gson:gson:2.11.0")
