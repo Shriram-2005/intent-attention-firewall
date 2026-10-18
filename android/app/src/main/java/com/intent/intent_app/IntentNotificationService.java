@@ -248,13 +248,15 @@ public class IntentNotificationService extends NotificationListenerService {
                 return;
             }
 
-            // 1. Saved Contact Protection: Always show messages from saved contacts
-            if (!title.isEmpty() && isSavedContact(title)) {
-                Log.i(TAG, "SAVED CONTACT PASS-THROUGH -> Allowed message from contact: " + title);
+            // 1. User's Explicit Block / Spam List MUST BE HONORED
+            // Saved contacts must NEVER override the user's explicit block list!
+            if (classification == 2) {
+                cancelNotification(sbn.getKey());
+                Log.i(TAG, "USER BLOCKED (Spam) -> Wiping notification from " + packageName);
                 if (!isGroupSummary) {
-                    logToDatabase(packageName, title, text, 0, interceptTimestamp, inferenceLatency, 1.5f);
+                    logToDatabase(packageName, title, text, 2, interceptTimestamp, inferenceLatency, 1.0f);
                 }
-                return; // Direct pass-through to user!
+                return;
             }
 
             // 2. Direct Peer-to-Peer Message Detection (WhatsApp, SMS, Telegram, Signal, DMs)
@@ -263,12 +265,6 @@ public class IntentNotificationService extends NotificationListenerService {
                                       extras.containsKey(Notification.EXTRA_MESSAGING_PERSON) ||
                                       extras.containsKey("android.people.list") ||
                                       hasInlineReplyAction(notification);
-
-            // Peer-to-peer personal messages MUST NEVER be auto-cancelled as SPAM (2)
-            if (isDirectMessage && classification == 2) {
-                Log.i(TAG, "Direct personal message detected for " + packageName + " -> Downgrading Spam to Buffer (never wipe chats).");
-                classification = 1;
-            }
 
             // Compute Cognitive Context Multiplier with Adaptive Weights
             android.content.SharedPreferences weightPrefs = getSharedPreferences(
@@ -284,6 +280,43 @@ public class IntentNotificationService extends NotificationListenerService {
                 if (hour >= 22 || hour <= 5) {
                     contextMultiplier = weightPrefs.getFloat("night_weight", 0.5f);
                 }
+            }
+
+            // 3. Driving Blockade: While driving, ONLY critical Urgent / OTP / Emergency alerts bypass.
+            // Non-urgent contact messages MUST be grounded safely into Vault, NEVER shown while driving!
+            if (isMovingFast) {
+                if (classification == 0) {
+                    Log.i(TAG, "VELOCITY PASS-THROUGH -> Preserved Critical Urgent alert while moving from " + packageName);
+                    if (!isGroupSummary) {
+                        logToDatabase(packageName, title, text, 0, interceptTimestamp, inferenceLatency, contextMultiplier);
+                        playUrgentSound();
+                    }
+                    return;
+                } else {
+                    cancelNotification(sbn.getKey());
+                    Log.i(TAG, "VELOCITY SAFETY BLOCKADE -> Muted non-urgent alert while moving from " + packageName);
+                    if (!isGroupSummary) {
+                        logToDatabase(packageName, title, text, classification, interceptTimestamp, inferenceLatency, contextMultiplier);
+                        repostSilentBuffer(packageName, title, text, notification.getSmallIcon(), notification.contentIntent);
+                    }
+                    return;
+                }
+            }
+
+            // 4. Saved Contact Pass-Through (Not driving, not blocked by user)
+            if (!title.isEmpty() && isSavedContact(title)) {
+                Log.i(TAG, "SAVED CONTACT PASS-THROUGH -> Allowed message from contact: " + title);
+                if (!isGroupSummary) {
+                    // Accurately log as Buffer/Normal communication (1), NOT Urgent (0), to prevent inflating urgent analytics!
+                    logToDatabase(packageName, title, text, classification == 0 ? 0 : 1, interceptTimestamp, inferenceLatency, contextMultiplier);
+                }
+                return; // Direct pass-through to user!
+            }
+
+            // Peer-to-peer personal messages MUST NEVER be auto-cancelled as SPAM (2)
+            if (isDirectMessage && classification == 2) {
+                Log.i(TAG, "Direct personal message detected for " + packageName + " -> Downgrading Spam to Buffer (never wipe chats).");
+                classification = 1;
             }
 
             // TTD / Implicit Feedback Override
@@ -304,28 +337,6 @@ public class IntentNotificationService extends NotificationListenerService {
             if (classification == 0 && contextMultiplier < 0.7f && appModifier < 1.2f) {
                 Log.i(TAG, "TTD EMA System overriding " + packageName + " from Urgent to Buffer (Context Threshold)");
                 classification = 1;
-            }
-
-            // [DO OR DIE] Velocity Blockade: Protect Urgent Alerts / OTPs even when driving!
-            if (isMovingFast) {
-                if (classification == 0) {
-                    // Critical Urgent / OTP / Emergency: PRESERVE & DELIVER SAFELY
-                    Log.i(TAG, "VELOCITY PASS-THROUGH -> Preserved Critical Urgent alert while moving from " + packageName);
-                    if (!isGroupSummary) {
-                        logToDatabase(packageName, title, text, 0, interceptTimestamp, inferenceLatency, contextMultiplier);
-                        playUrgentSound();
-                    }
-                    return; // Let it bypass safely!
-                } else {
-                    // Buffer / Spam: Silence and aggregate into Vault
-                    cancelNotification(sbn.getKey());
-                    Log.i(TAG, "VELOCITY SAFETY BLOCKADE -> Muted non-urgent alert while moving from " + packageName);
-                    if (!isGroupSummary) {
-                        logToDatabase(packageName, title, text, classification, interceptTimestamp, inferenceLatency, contextMultiplier);
-                        repostSilentBuffer(packageName, title, text, notification.getSmallIcon(), notification.contentIntent);
-                    }
-                    return;
-                }
             }
 
             // Update the real-time social media presence check (throttled)

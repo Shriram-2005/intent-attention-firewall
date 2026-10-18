@@ -186,7 +186,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         subtitle: 'Configure when the background worker fires the evening notification.',
                         onTap: () async {
                           final prefs = await SharedPreferences.getInstance();
-                          if (!mounted) return;
+                          if (!context.mounted) return;
                           final h = prefs.getInt('eod_hour') ?? 21;
                           final m = prefs.getInt('eod_minute') ?? 0;
                           final time = await showTimePicker(

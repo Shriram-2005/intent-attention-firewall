@@ -27,8 +27,7 @@ public class HeuristicDictionary {
             "debited", "wire", "deposit", "insufficient", "balance",
             "meeting", "interview", "schedule", "rescheduled", "boss", "manager", "client", 
             "deadline", "presentation", "zoom", "teams", "link", "agenda", "brief", 
-            "fyi", "memo", "urgent",
-            "dad", "mom", "wife", "husband", "son", "daughter", "brother", "sister"
+            "fyi", "memo", "urgent"
         ));
 
         // High-confidence spam and promotional indicators only.

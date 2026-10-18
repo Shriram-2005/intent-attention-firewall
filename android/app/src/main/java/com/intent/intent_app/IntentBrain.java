@@ -375,6 +375,23 @@ public class IntentBrain {
         "(?i)\\b(?:prescription\\s+(?:is\\s+)?ready\\s+for\\s+pickup|critical\\s+lab\\s+result)\\b"
     );
 
+    // High-confidence promotional pattern targeting real marketing copy, sales, discounts, coupon codes, and renewals.
+    // Explicitly triaged into Buffer (1) / Vault to ensure promos NEVER falsely ring as Urgent (0)
+    // AND are NEVER silently wiped/cancelled as Spam (2).
+    private static final java.util.regex.Pattern STRICT_PROMOTIONAL_PATTERN = java.util.regex.Pattern.compile(
+        "(?i)\\b(?:[0-9]{1,2}%\\s*(?:off|discount|cashback)|flat\\s+[0-9]+%|save\\s+(?:up\\s+to\\s+)?[0-9]+%)\\b|" +
+        "(?i)\\b(?:flash|mega|clearance|holiday|festive|annual|season|black\\s+friday|cyber\\s+monday|end[- ]of[- ]season)\\s+(?:sale|deals?|offers?)\\b|" +
+        "(?i)\\b(?:use|apply|with)?\\s*(?:promo|coupon|discount)?\\s*code[:\\s]+[a-zA-Z0-9_\\-]{3,15}\\b|" +
+        "(?i)\\b(?:shop|order|book|buy)\\s+(?:today|now)?.*?(?:save|discount|[0-9]+%)\\b|" +
+        "(?i)\\b(?:membership|subscription)\\b.*?(?:renewed|expir(?:ed|ing)|renewal|cancelled|upgrade)\\b|" +
+        "(?i)\\b(?:limited[- ]time|exclusive|special)\\s+(?:offer|deal|discount)\\b|" +
+        "(?i)\\b(?:buy\\s+[0-9]+\\s+get\\s+[0-9]+\\s+free|free\\s+(?:shipping|delivery)\\s+on\\s+orders)\\b"
+    );
+
+    private static final java.util.Set<String> FAMILY_RELATIONS = new java.util.HashSet<>(java.util.Arrays.asList(
+        "mom", "dad", "mother", "father", "wife", "husband", "son", "daughter", "brother", "sister"
+    ));
+
     static boolean isOtp(String text) {
         if (text == null) return false;
         return STRICT_OTP_PATTERN.matcher(text).find();
@@ -388,6 +405,29 @@ public class IntentBrain {
     static boolean isCriticalService(String text) {
         if (text == null) return false;
         return STRICT_CRITICAL_SERVICE_PATTERN.matcher(text).find();
+    }
+
+    static boolean isPromotional(String text) {
+        if (text == null) return false;
+        return STRICT_PROMOTIONAL_PATTERN.matcher(text).find();
+    }
+
+    /**
+     * Identifies immediate family senders deliberately (e.g. "Mom: did you eat?", "Dad: are you back home?").
+     * Deliberate product decision ensuring family communication is treated as Urgent (0)
+     * without falsely triggering on promotional copy mentioning "mom" or "sister" in body text.
+     */
+    static boolean isFamilySender(String text) {
+        if (text == null || text.trim().isEmpty()) return false;
+        String lower = text.toLowerCase().trim();
+        for (String relation : FAMILY_RELATIONS) {
+            if (lower.startsWith(relation + ":") || lower.startsWith(relation + " :") ||
+                lower.startsWith(relation + " -") || lower.startsWith(relation + " –") ||
+                lower.equals(relation)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -459,7 +499,12 @@ public class IntentBrain {
             }
         }
 
-        // 5. System Zero-Drop Protection for verified OTP, Financial transactions & Emergencies
+        // 5. Deliberate Family Urgency: Immediate family senders (e.g. "Mom: did you eat?", "Dad: are you back home?")
+        if (isFamilySender(text)) {
+            return 0; // Urgent by deliberate product design
+        }
+
+        // 5.1 System Zero-Drop Protection for verified OTP, Financial transactions & Emergencies
         if (isOtp(text)) {
             return 0; // Urgent OTP
         }
@@ -468,6 +513,12 @@ public class IntentBrain {
         }
         if (isCriticalService(text)) {
             return 0; // Urgent Delivery / Emergency Dispatch
+        }
+
+        // 5.2 High-Confidence Promotional Copy Detection -> Route to Buffer (1) / Vault
+        // Promos never ring as Urgent (0) and are never wiped as Spam (2) unless user explicitly blocked them.
+        if (isPromotional(text)) {
+            return 1; // Buffer
         }
 
         // 6. Tokenization for System Dictionaries

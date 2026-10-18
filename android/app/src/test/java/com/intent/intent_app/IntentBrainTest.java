@@ -183,4 +183,49 @@ public class IntentBrainTest {
         assertNotEquals("Alex video message must never be classified as Spam (2)", 2, IntentBrain.evaluateHeuristics(msg6, null, null, null, null));
         assertNotEquals("Meet today message must never be classified as Spam (2)", 2, IntentBrain.evaluateHeuristics(msg7, null, null, null, null));
     }
+
+    // ── 8. REAL PRODUCTION TEST: Promos Safely Routed to Buffer (1) ───────────
+    @Test
+    public void testProductionClassifier_PromosRoutedToBuffer() {
+        String promo1 = "Flash sale! Use code 2025 for 20% off";
+        String promo2 = "Your membership is 2024 renewed";
+        String promo3 = "Book your appointment today and save";
+        String promo4 = "Limited time offer: Flat 30% off with promo code SAVE30";
+        String promo5 = "Buy 1 get 1 free today only! Free shipping on orders";
+
+        assertTrue(IntentBrain.isPromotional(promo1));
+        assertTrue(IntentBrain.isPromotional(promo2));
+        assertTrue(IntentBrain.isPromotional(promo3));
+        assertTrue(IntentBrain.isPromotional(promo4));
+        assertTrue(IntentBrain.isPromotional(promo5));
+
+        // Promos MUST evaluate to Buffer (1) - neither Urgent (0) nor Spam (2)
+        assertEquals(1, IntentBrain.evaluateHeuristics(promo1, null, null, null, null));
+        assertEquals(1, IntentBrain.evaluateHeuristics(promo2, null, null, null, null));
+        assertEquals(1, IntentBrain.evaluateHeuristics(promo3, null, null, null, null));
+        assertEquals(1, IntentBrain.evaluateHeuristics(promo4, null, null, null, null));
+        assertEquals(1, IntentBrain.evaluateHeuristics(promo5, null, null, null, null));
+    }
+
+    // ── 9. REAL PRODUCTION TEST: Deliberate Family Urgency ─────────────────────
+    @Test
+    public void testProductionClassifier_FamilySenderDeliberateUrgency() {
+        String momMsg = "Mom: did you eat?";
+        String dadMsg = "Dad: are you back home?";
+        String wifeMsg = "Wife: please call me when you leave";
+        String promoMentioningMom = "Mother's Day sale! Buy a gift for your mom with code LOVE";
+
+        // Family senders must be Urgent (0) by deliberate product design
+        assertTrue(IntentBrain.isFamilySender(momMsg));
+        assertTrue(IntentBrain.isFamilySender(dadMsg));
+        assertTrue(IntentBrain.isFamilySender(wifeMsg));
+        assertFalse(IntentBrain.isFamilySender(promoMentioningMom));
+
+        assertEquals(0, IntentBrain.evaluateHeuristics(momMsg, null, null, null, null));
+        assertEquals(0, IntentBrain.evaluateHeuristics(dadMsg, null, null, null, null));
+        assertEquals(0, IntentBrain.evaluateHeuristics(wifeMsg, null, null, null, null));
+
+        // Promo mentioning "mom" in body MUST NOT be Urgent (0)
+        assertNotEquals(0, IntentBrain.evaluateHeuristics(promoMentioningMom, null, null, null, null));
+    }
 }
