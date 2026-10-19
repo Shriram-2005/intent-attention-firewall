@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
@@ -296,7 +295,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
           } else {
             // Append to current paragraph, adding a space if necessary
             if (currentParagraph.isNotEmpty) {
-              currentParagraph += ' ' + trimmed;
+              currentParagraph += ' $trimmed';
             } else {
               currentParagraph = trimmed;
             }
@@ -461,7 +460,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
       await file.writeAsBytes(await pdf.save());
 
       if (mounted) {
-        if (dialogContext != null) {
+        if (dialogContext != null && dialogContext!.mounted) {
           Navigator.pop(dialogContext!); // Safely specifically pop the dialog
         }
         await Share.shareXFiles([
@@ -469,8 +468,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
         ], text: 'Focus Analytics AI Report');
       }
     } catch (e) {
-      if (mounted && dialogContext != null) {
-        Navigator.pop(dialogContext!);
+      if (mounted) {
+        if (dialogContext != null && dialogContext!.mounted) {
+          Navigator.pop(dialogContext!);
+        }
 
         debugPrint("AI Report Error: $e");
         final errString = e.toString().toLowerCase();
@@ -491,9 +492,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
                    errString.contains('exhausted')) {
           errorMessage = 'Our AI Coach is currently hitting API rate limits. Please try again later.';
         } else {
-          errorMessage = 'AI Error: ${e.toString().length > 90 ? e.toString().substring(0, 90) + '...' : e.toString()}';
+          errorMessage = 'AI Error: ${e.toString().length > 90 ? "${e.toString().substring(0, 90)}..." : e.toString()}';
         }
 
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(errorMessage),
@@ -550,19 +552,29 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
       
       // Calculate 24h
       if (now.difference(ts).inHours < 24) {
-         if (ts.hour < 6) tData[0]++;
-         else if (ts.hour < 12) tData[1]++;
-         else if (ts.hour < 18) tData[2]++;
-         else tData[3]++;
-         tData[4]++; // Current end bucket
+        if (ts.hour < 6) {
+          tData[0]++;
+        } else if (ts.hour < 12) {
+          tData[1]++;
+        } else if (ts.hour < 18) {
+          tData[2]++;
+        } else {
+          tData[3]++;
+        }
+        tData[4]++; // Current end bucket
       }
       
       // Contextual
       final reason = (log['reason'] as String?)?.toLowerCase() ?? '';
-      if (reason.contains('focus') || reason.contains('deep')) cData[0]++;
-      else if (reason.contains('drive') || reason.contains('auto')) cData[1]++;
-      else if (reason.contains('night') || reason.contains('sleep')) cData[2]++;
-      else cData[3]++;
+      if (reason.contains('focus') || reason.contains('deep')) {
+        cData[0]++;
+      } else if (reason.contains('drive') || reason.contains('auto')) {
+        cData[1]++;
+      } else if (reason.contains('night') || reason.contains('sleep')) {
+        cData[2]++;
+      } else {
+        cData[3]++;
+      }
       
       // Top Interruptions (App name)
       final pkg = (log['packageName'] as String?)?.split('.').last ?? 'system';

@@ -203,11 +203,17 @@ class _VipManagerScreenState extends State<VipManagerScreen> with SingleTickerPr
                        void addIfValid(String val) {
                           if (val.isNotEmpty) {
                              if (isVipTab) {
-                               if (!_absoluteVipKeywords.contains(val)) _absoluteVipKeywords.insert(0, val);
+                               if (!_absoluteVipKeywords.contains(val)) {
+                                 _absoluteVipKeywords.insert(0, val);
+                               }
                              } else {
-                               if (_selectedImplicitTab == 0 && !_urgentKeywords.contains(val)) _urgentKeywords.insert(0, val);
-                               else if (_selectedImplicitTab == 1 && !_bufferKeywords.contains(val)) _bufferKeywords.insert(0, val);
-                               else if (_selectedImplicitTab == 2 && !_blockKeywords.contains(val)) _blockKeywords.insert(0, val);
+                               if (_selectedImplicitTab == 0 && !_urgentKeywords.contains(val)) {
+                                 _urgentKeywords.insert(0, val);
+                               } else if (_selectedImplicitTab == 1 && !_bufferKeywords.contains(val)) {
+                                 _bufferKeywords.insert(0, val);
+                               } else if (_selectedImplicitTab == 2 && !_blockKeywords.contains(val)) {
+                                 _blockKeywords.insert(0, val);
+                               }
                              }
                           }
                        }

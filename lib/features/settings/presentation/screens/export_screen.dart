@@ -81,6 +81,7 @@ class _ExportScreenState extends State<ExportScreen> {
         range.end.add(const Duration(days: 1)).millisecondsSinceEpoch - 1,
       );
       
+      if (!mounted) return;
       if (history.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -119,6 +120,7 @@ class _ExportScreenState extends State<ExportScreen> {
       await Share.shareXFiles([XFile(path)], text: 'Intent Notification Audit Log');
 
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Export failed: $e', style: GoogleFonts.inter(color: Colors.redAccent, fontSize: 14)),
@@ -159,6 +161,7 @@ class _ExportScreenState extends State<ExportScreen> {
         setState(() { _isDbTransfer = true; });
         String filePath = result.files.single.path!;
         
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Importing Database. App will restart shortly...', style: GoogleFonts.inter(color: Colors.white)),

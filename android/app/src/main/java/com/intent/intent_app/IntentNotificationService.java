@@ -238,16 +238,24 @@ public class IntentNotificationService extends NotificationListenerService {
             String readablePackage = getReadablePackageName(packageName);
             String fullContext = readablePackage + ". " + title + ". " + text;
 
-            // 1. Direct Peer-to-Peer Message Detection (WhatsApp, SMS, Telegram, Signal, DMs)
-            boolean isDirectMessage = Notification.CATEGORY_MESSAGE.equals(notification.category) ||
-                                      Notification.CATEGORY_CALL.equals(notification.category) ||
-                                      extras.containsKey(Notification.EXTRA_MESSAGING_PERSON) ||
-                                      extras.containsKey("android.people.list") ||
-                                      hasInlineReplyAction(notification);
+            // 1. Direct Peer-to-Peer Message vs Group Conversation Detection
+            boolean isGroupConversation = extras.getBoolean(Notification.EXTRA_IS_GROUP_CONVERSATION, false) ||
+                                          extras.containsKey("android.conversationTitle") ||
+                                          (extras.containsKey(Notification.EXTRA_CONVERSATION_TITLE) &&
+                                           extras.getCharSequence(Notification.EXTRA_CONVERSATION_TITLE) != null);
+
+            boolean isMessaging = Notification.CATEGORY_MESSAGE.equals(notification.category) ||
+                                  Notification.CATEGORY_CALL.equals(notification.category) ||
+                                  extras.containsKey(Notification.EXTRA_MESSAGING_PERSON) ||
+                                  extras.containsKey("android.people.list") ||
+                                  hasInlineReplyAction(notification);
+
+            // Direct 1-on-1 communication strictly excludes group chats (e.g. "Mom Friends", "Dad Jokes")
+            boolean isDirect1to1Message = isMessaging && !isGroupConversation;
 
             // 3. AI Pipeline
             long inferenceStartMs = System.currentTimeMillis();
-            IntentBrain.ClassificationResult result = intentBrain.classify(fullContext, title, isDirectMessage);
+            IntentBrain.ClassificationResult result = intentBrain.classify(fullContext, title, isDirect1to1Message);
             int classification = result.category;
             long inferenceLatency = System.currentTimeMillis() - inferenceStartMs;
 
@@ -258,7 +266,7 @@ public class IntentNotificationService extends NotificationListenerService {
 
             // User's Explicit Block / Spam Rules MUST BE HONORED!
             // If the user explicitly added this sender/phrase to their Block list in settings,
-            // cancel and wipe it immediately, EVEN IF it is a direct message (WhatsApp, SMS, etc.)!
+            // cancel and wipe it immediately, EVEN IF it is a direct message or group chat!
             if (classification == 2 && result.isUserExplicitRule) {
                 cancelNotification(sbn.getKey());
                 Log.i(TAG, "USER EXPLICIT BLOCK -> Wiping notification from " + packageName + " (User Block Rule Honored)");
@@ -268,10 +276,10 @@ public class IntentNotificationService extends NotificationListenerService {
                 return;
             }
 
-            // Peer-to-peer personal messages MUST NEVER be auto-cancelled as SPAM (2) by ML or generic heuristics!
-            // Direct personal communications are downgraded to Buffer (1) / Vault so they are never wiped!
-            if (isDirectMessage && classification == 2) {
-                Log.i(TAG, "Direct personal message detected for " + packageName + " -> Downgrading ML/Heuristic Spam to Buffer (never wipe chats).");
+            // Peer-to-peer personal and group messages MUST NEVER be auto-cancelled as SPAM (2) by ML or generic heuristics!
+            // Legitimate communications are downgraded to Buffer (1) / Vault so they are never wiped!
+            if (isMessaging && classification == 2) {
+                Log.i(TAG, "Messaging communication detected for " + packageName + " -> Downgrading ML/Heuristic Spam to Buffer (never wipe chats).");
                 classification = 1;
             }
 
@@ -337,7 +345,7 @@ public class IntentNotificationService extends NotificationListenerService {
             float appModifier = weightPrefs.getFloat(appModKey, 1.0f);
             
             if (classification == 1) { // If ML defaulted to Buffer or wasn't absolutely certain
-                if (appModifier < 0.7f && !isDirectMessage) { // Do not override personal messaging apps to Spam!
+                if (appModifier < 0.7f && !isMessaging) { // Do not override personal messaging apps to Spam!
                     Log.i(TAG, "TTD EMA System overriding " + packageName + " from Buffer to Spam due to low weight");
                     classification = 2; // Heavily dismissed app -> Spam
                 } else if (appModifier > 1.4f) {

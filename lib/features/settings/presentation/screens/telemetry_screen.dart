@@ -285,7 +285,7 @@ class _TelemetryScreenState extends State<TelemetryScreen> {
           ),
           const SizedBox(height: 16),
           DropdownButtonFormField<int>(
-            value: _threshold,
+            initialValue: _threshold,
             dropdownColor: AppTheme.surfaceDark,
             icon: const Icon(Icons.expand_more, color: Colors.white70),
             decoration: InputDecoration(

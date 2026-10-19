@@ -444,22 +444,17 @@ public class IntentBrain {
     ));
 
     private static final java.util.regex.Pattern DIRECT_MSG_APP_FAMILY_PATTERN = java.util.regex.Pattern.compile(
-        "(?i)^(?:whatsapp|messages|telegram|signal|messenger|sms|google\\s+chat)\\.\\s*(?:mom|dad|mother|father|wife|husband|son|daughter|brother|sister)(?:\\s+[a-zA-Z0-9]+)?\\.\\s*.*$"
+        "(?i)^(?:whatsapp|messages|telegram|signal|messenger|sms|google\\s+chat)\\.\\s*(?:mom|dad|mother|father|wife|husband|son|daughter|brother|sister)\\.\\s*.*$"
     );
 
     private static final java.util.regex.Pattern RAW_FAMILY_SENDER_PATTERN = java.util.regex.Pattern.compile(
-        "(?i)^(?:mom|dad|mother|father|wife|husband|son|daughter|brother|sister)(?:\\s+[a-zA-Z0-9]+)?\\s*[:\\-]\\s*.*$"
+        "(?i)^(?:mom|dad|mother|father|wife|husband|son|daughter|brother|sister)\\s*[:\\-]\\s*.*$"
     );
 
     public static boolean isFamilyRelation(String name) {
         if (name == null || name.trim().isEmpty()) return false;
         String trimmed = name.trim().toLowerCase();
-        for (String rel : FAMILY_RELATIONS) {
-            if (trimmed.equals(rel) || trimmed.startsWith(rel + " ") || trimmed.endsWith(" " + rel)) {
-                return true;
-            }
-        }
-        return false;
+        return FAMILY_RELATIONS.contains(trimmed);
     }
 
     /**

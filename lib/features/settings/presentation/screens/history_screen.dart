@@ -56,7 +56,7 @@ class _HistoryScreenState extends State<HistoryScreen> with WidgetsBindingObserv
       bool categoryMatch = _selectedCategoryFilter == null;
       if (!categoryMatch) {
         if (_selectedCategoryFilter == 3) {
-          final content = ((item['title'] ?? '') + ' ' + (item['content'] ?? item['text'] ?? '')).toLowerCase();
+          final content = '${item['title'] ?? ''} ${item['content'] ?? item['text'] ?? ''}'.toLowerCase();
           categoryMatch = content.contains('otp') || content.contains('code') || 
                           content.contains('verification') || content.contains('password') || 
                           content.contains('security') || content.contains('login') || 
@@ -423,9 +423,13 @@ class _HistoryScreenState extends State<HistoryScreen> with WidgetsBindingObserv
                             final int category = item['category'] ?? 2;
                             
                             Color dotColor;
-                            if (category == 0) dotColor = AppTheme.urgentAccent;
-                            else if (category == 1) dotColor = AppTheme.bufferAccent;
-                            else dotColor = AppTheme.spamAccent;
+                            if (category == 0) {
+                              dotColor = AppTheme.urgentAccent;
+                            } else if (category == 1) {
+                              dotColor = AppTheme.bufferAccent;
+                            } else {
+                              dotColor = AppTheme.spamAccent;
+                            }
                             
                             return Padding(
                               padding: const EdgeInsets.symmetric(vertical: 20.0),
@@ -757,9 +761,13 @@ class _HistoryScreenState extends State<HistoryScreen> with WidgetsBindingObserv
                          Navigator.pop(context);
                          final prefs = await SharedPreferences.getInstance();
                          String dartKey = '';
-                         if (category == 0) dartKey = 'urgent_keywords';
-                         else if (category == 1) dartKey = 'buffer_keywords';
-                         else dartKey = 'block_keywords';
+                         if (category == 0) {
+                           dartKey = 'urgent_keywords';
+                         } else if (category == 1) {
+                           dartKey = 'buffer_keywords';
+                         } else {
+                           dartKey = 'block_keywords';
+                         }
 
                          List<String> storedStrList = prefs.getStringList(dartKey) ?? [];
 
@@ -781,6 +789,7 @@ class _HistoryScreenState extends State<HistoryScreen> with WidgetsBindingObserv
                             }
                          }
 
+                         if (!context.mounted) return;
                          ScaffoldMessenger.of(context).showSnackBar(
                            SnackBar(
                              content: Text('Engine Memorized Rule: "$text"', style: GoogleFonts.inter(color: Colors.black, fontWeight: FontWeight.w600)),

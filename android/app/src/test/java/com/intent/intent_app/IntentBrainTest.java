@@ -230,16 +230,26 @@ public class IntentBrainTest {
         String flipkartPromo = "Flipkart. Sale. Mom. Shop today and save big";
         String cultPromo = "Cult. Cult. Son: this week's new arrivals, shop now";
 
-        // Family senders must be Urgent (0) by deliberate product design in BOTH production format and raw format
+        // Group chats with family words in their name must NEVER be Urgent (0)
+        String momFriendsGroup = "WhatsApp. Mom Friends. meet at 6?";
+        String dadJokesGroup = "WhatsApp. Dad Jokes. why did the chicken cross the road?";
+        String sisterContact = "WhatsApp. Sister Mary. praying for you";
+
+        // Family senders must be Urgent (0) by deliberate product design ONLY on exact match in BOTH production format and raw format
         assertTrue(IntentBrain.isFamilySender(prodMom1));
         assertTrue(IntentBrain.isFamilySender(prodMom2));
         assertTrue(IntentBrain.isFamilySender(prodDad1));
         assertTrue(IntentBrain.isFamilySender(prodWife));
         assertTrue(IntentBrain.isFamilySender(rawMom));
         assertTrue(IntentBrain.isFamilySender(rawDad));
+
+        // Group chats, contact nicknames, and promos MUST NOT match family sender
         assertFalse(IntentBrain.isFamilySender(promoMentioningMom));
         assertFalse(IntentBrain.isFamilySender(flipkartPromo));
         assertFalse(IntentBrain.isFamilySender(cultPromo));
+        assertFalse("Group chat 'Mom Friends' must not be classified as a family sender", IntentBrain.isFamilySender(momFriendsGroup));
+        assertFalse("Group chat 'Dad Jokes' must not be classified as a family sender", IntentBrain.isFamilySender(dadJokesGroup));
+        assertFalse("Full name 'Sister Mary' must not be classified as exact family relation", IntentBrain.isFamilySender(sisterContact));
 
         assertEquals(0, IntentBrain.evaluateHeuristics(prodMom1, null, null, null, null));
         assertEquals(0, IntentBrain.evaluateHeuristics(prodMom2, null, null, null, null));
@@ -252,6 +262,8 @@ public class IntentBrainTest {
         assertNotEquals(0, IntentBrain.evaluateHeuristics(promoMentioningMom, null, null, null, null));
         assertNotEquals(0, IntentBrain.evaluateHeuristics(flipkartPromo, null, null, null, null));
         assertNotEquals(0, IntentBrain.evaluateHeuristics(cultPromo, null, null, null, null));
+        assertNotEquals("Group chat 'Mom Friends' must never evaluate to Urgent (0)", 0, IntentBrain.evaluateHeuristics(momFriendsGroup, null, null, null, null));
+        assertNotEquals("Group chat 'Dad Jokes' must never evaluate to Urgent (0)", 0, IntentBrain.evaluateHeuristics(dadJokesGroup, null, null, null, null));
 
         // Detailed classification checks
         IntentBrain.ClassificationResult resFlipkart = IntentBrain.evaluateHeuristicsDetailed(flipkartPromo, "Sale", false, null, null, null, null);
@@ -262,6 +274,17 @@ public class IntentBrainTest {
         assertNotEquals(0, resCult.category);
         assertNotEquals("FAMILY", resCult.source);
 
+        // Group conversation 'Mom Friends' is NOT a 1-to-1 direct message (isDirectMessage = false)
+        IntentBrain.ClassificationResult resMomFriends = IntentBrain.evaluateHeuristicsDetailed(momFriendsGroup, "Mom Friends", false, null, null, null, null);
+        assertNotEquals(0, resMomFriends.category);
+        assertNotEquals("FAMILY", resMomFriends.source);
+
+        // Even if passed as direct message, 'Mom Friends' does not exactly match 'mom'
+        IntentBrain.ClassificationResult resMomFriendsDm = IntentBrain.evaluateHeuristicsDetailed(momFriendsGroup, "Mom Friends", true, null, null, null, null);
+        assertNotEquals("Non-exact family name match must not trigger FAMILY urgency", 0, resMomFriendsDm.category);
+        assertNotEquals("FAMILY", resMomFriendsDm.source);
+
+        // Exact match 'Mom' on a 1-to-1 direct message triggers FAMILY urgency
         IntentBrain.ClassificationResult resMom = IntentBrain.evaluateHeuristicsDetailed(prodMom1, "Mom", true, null, null, null, null);
         assertEquals(0, resMom.category);
         assertEquals("FAMILY", resMom.source);
