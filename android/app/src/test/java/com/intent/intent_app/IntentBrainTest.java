@@ -327,41 +327,42 @@ public class IntentBrainTest {
         assertTrue("vocab.json must not be empty", vocabFile.length() > 1000L);
     }
 
-    // ── 12. REAL PRODUCTION TEST: Group Chat Named Exactly "Mom" / "Dad" Edge Case ──
+    // ── 12. REAL PRODUCTION TEST: Family 1:1 Messages with Colons & Group Distinction ──
     @Test
-    public void testProductionClassifier_GroupNamedMomOrDad_NeverUrgentFamily() {
-        String groupNamedMom1 = "WhatsApp. Mom. Ravi: did you buy it?";
-        String groupNamedMom2 = "WhatsApp. Mom. Priya: let's meet at 7";
-        String groupNamedDad = "WhatsApp. Dad. Uncle Bob: are you joining the call?";
+    public void testProductionClassifier_FamilyMessagesWithColons_PreserveUrgency() {
+        // Real-world 1:1 messages from Mom containing colons (time, notes, addresses, etc.)
+        String msg1 = "WhatsApp. Mom. did you eat?";
+        String msg2 = "WhatsApp. Mom. Dinner at 8: bring wine";
+        String msg3 = "WhatsApp. Mom. Note: call me when you land";
+        String msg4 = "WhatsApp. Mom. Time: 6pm, don’t be late";
+        String msg5 = "WhatsApp. Mom. Address: 12 MG Road, come soon";
 
-        // 1. Group chats where isDirectMessage is false MUST NOT trigger FAMILY urgency
+        // All confirmed 1:1 direct messages from Mom MUST be classified as Urgent (0) with source "FAMILY"
+        IntentBrain.ClassificationResult r1 = IntentBrain.evaluateHeuristicsDetailed(msg1, "Mom", true, null, null, null, null);
+        IntentBrain.ClassificationResult r2 = IntentBrain.evaluateHeuristicsDetailed(msg2, "Mom", true, null, null, null, null);
+        IntentBrain.ClassificationResult r3 = IntentBrain.evaluateHeuristicsDetailed(msg3, "Mom", true, null, null, null, null);
+        IntentBrain.ClassificationResult r4 = IntentBrain.evaluateHeuristicsDetailed(msg4, "Mom", true, null, null, null, null);
+        IntentBrain.ClassificationResult r5 = IntentBrain.evaluateHeuristicsDetailed(msg5, "Mom", true, null, null, null, null);
+
+        assertEquals("Simple message from Mom must be Urgent (0)", 0, r1.category);
+        assertEquals("FAMILY", r1.source);
+        assertEquals("Message with 'Dinner at 8:' must preserve Urgent (0)", 0, r2.category);
+        assertEquals("FAMILY", r2.source);
+        assertEquals("Message with 'Note:' must preserve Urgent (0)", 0, r3.category);
+        assertEquals("FAMILY", r3.source);
+        assertEquals("Message with 'Time:' must preserve Urgent (0)", 0, r4.category);
+        assertEquals("FAMILY", r4.source);
+        assertEquals("Message with 'Address:' must preserve Urgent (0)", 0, r5.category);
+        assertEquals("FAMILY", r5.source);
+
+        // However, if the notification comes from a group chat named "Mom" (isDirectMessage == false),
+        // it MUST NOT trigger family urgency:
+        String groupNamedMom = "WhatsApp. Mom. Ravi: did you buy it?";
         IntentBrain.ClassificationResult resGroupMom = IntentBrain.evaluateHeuristicsDetailed(
-            groupNamedMom1, "Mom", false, null, null, null, null
+            groupNamedMom, "Mom", false, null, null, null, null
         );
         assertNotEquals("Group chat named 'Mom' must never be Urgent (0)", 0, resGroupMom.category);
         assertNotEquals("Group chat named 'Mom' must not have source 'FAMILY'", "FAMILY", resGroupMom.source);
-
-        // 2. Even in text-only fallback, the group sender prefix ("Ravi: ...") prevents false FAMILY urgency
-        IntentBrain.ClassificationResult resTextFallback = IntentBrain.evaluateHeuristicsDetailed(
-            groupNamedMom1, null, false, null, null, null, null
-        );
-        assertNotEquals("Text fallback with sender prefix must never be Urgent (0)", 0, resTextFallback.category);
-        assertNotEquals("Text fallback with sender prefix must not have source 'FAMILY'", "FAMILY", resTextFallback.source);
-
-        assertFalse("groupNamedMom1 text must not be recognized as family direct message",
-            IntentBrain.isFamilyDirectMessage(null, false, groupNamedMom1));
-        assertFalse("groupNamedMom2 text must not be recognized as family direct message",
-            IntentBrain.isFamilyDirectMessage(null, false, groupNamedMom2));
-        assertFalse("groupNamedDad text must not be recognized as family direct message",
-            IntentBrain.isFamilyDirectMessage(null, false, groupNamedDad));
-
-        // 3. Sender prefix detection helper
-        assertTrue(IntentBrain.isGroupMessageText("Ravi: did you buy it?"));
-        assertTrue(IntentBrain.isGroupMessageText("Priya: let's meet at 7"));
-        assertTrue(IntentBrain.isGroupMessageText("Uncle Bob: are you joining the call?"));
-        assertFalse("Direct text must not match group prefix", IntentBrain.isGroupMessageText("did you buy it?"));
-        assertFalse("URL must not match group prefix", IntentBrain.isGroupMessageText("https://example.com/test"));
-        assertFalse("Timestamp must not match group prefix", IntentBrain.isGroupMessageText("10:30 am meeting"));
     }
 
     // ── 13. REAL PRODUCTION TEST: Personal Messages from Friends ────────────

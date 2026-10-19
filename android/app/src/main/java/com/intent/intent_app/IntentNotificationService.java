@@ -239,17 +239,17 @@ public class IntentNotificationService extends NotificationListenerService {
             String fullContext = readablePackage + ". " + title + ". " + text;
 
             // 1. Direct Peer-to-Peer Message vs Group Conversation Detection
-            // Multi-signal detection across standard extras, MessagingStyle, textLines, and message body.
-            // Reliably identifies groups even when messaging apps omit optional EXTRA_IS_GROUP_CONVERSATION.
+            // Multi-signal detection across standard Android Notification extras (MessagingStyle).
+            CharSequence convTitle = extras.getCharSequence(Notification.EXTRA_CONVERSATION_TITLE);
+            if (convTitle == null) {
+                convTitle = extras.getCharSequence("android.conversationTitle");
+            }
+            boolean hasConversationTitle = convTitle != null && !convTitle.toString().trim().isEmpty();
+
             boolean isGroupConversation = extras.getBoolean(Notification.EXTRA_IS_GROUP_CONVERSATION, false) ||
                                           extras.getBoolean("android.isGroupConversation", false) ||
-                                          (extras.getCharSequence(Notification.EXTRA_CONVERSATION_TITLE) != null &&
-                                           !extras.getCharSequence(Notification.EXTRA_CONVERSATION_TITLE).toString().trim().isEmpty()) ||
-                                          (extras.getCharSequence("android.conversationTitle") != null &&
-                                           !extras.getCharSequence("android.conversationTitle").toString().trim().isEmpty()) ||
-                                          isGroupMessageText(text) ||
-                                          hasGroupTextLines(extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)) ||
-                                          hasMultipleSendersInMessages(extras, title);
+                                          hasConversationTitle ||
+                                          hasMultipleSendersInMessages(extras);
 
             boolean isMessaging = Notification.CATEGORY_MESSAGE.equals(notification.category) ||
                                   Notification.CATEGORY_CALL.equals(notification.category) ||
@@ -815,27 +815,7 @@ public class IntentNotificationService extends NotificationListenerService {
         return false;
     }
 
-    private static final java.util.regex.Pattern GROUP_SENDER_PREFIX_PATTERN = java.util.regex.Pattern.compile(
-        "^(?!https?:|ftp:|[0-9]{1,2}:[0-9]{2})([^:\\n]{1,35}):\\s+(.*)$",
-        java.util.regex.Pattern.DOTALL
-    );
-
-    public static boolean isGroupMessageText(String text) {
-        if (text == null || text.trim().isEmpty()) return false;
-        return GROUP_SENDER_PREFIX_PATTERN.matcher(text.trim()).matches();
-    }
-
-    public static boolean hasGroupTextLines(CharSequence[] lines) {
-        if (lines == null || lines.length == 0) return false;
-        for (CharSequence line : lines) {
-            if (line != null && isGroupMessageText(line.toString())) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    public static boolean hasMultipleSendersInMessages(android.os.Bundle extras, String title) {
+    public static boolean hasMultipleSendersInMessages(android.os.Bundle extras) {
         if (extras == null) return false;
         try {
             java.util.List<?> messages = extras.getParcelableArrayList("android.messages");
@@ -850,16 +830,13 @@ public class IntentNotificationService extends NotificationListenerService {
                         android.os.Bundle mb = (android.os.Bundle) item;
                         CharSequence sender = mb.getCharSequence("sender");
                         if (sender != null && !sender.toString().trim().isEmpty()) {
-                            String s = sender.toString().trim();
-                            senders.add(s.toLowerCase());
-                            if (title != null && !title.isEmpty() && !s.equalsIgnoreCase(title.trim())) {
-                                return true; // Sender differs from conversation title -> Group chat!
-                            }
+                            senders.add(sender.toString().trim().toLowerCase());
                         }
                     }
                 }
+                // Multiple distinct senders participating in the thread strictly indicates a group
                 if (senders.size() > 1) {
-                    return true; // Multiple distinct participants -> Group chat!
+                    return true;
                 }
             }
         } catch (Exception ignored) {}
