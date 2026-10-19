@@ -326,4 +326,84 @@ public class IntentBrainTest {
         assertTrue("lstm.tflite model must not be empty", tfliteFile.length() > 1000000L); // ~3.5MB
         assertTrue("vocab.json must not be empty", vocabFile.length() > 1000L);
     }
+
+    // ── 12. REAL PRODUCTION TEST: Group Chat Named Exactly "Mom" / "Dad" Edge Case ──
+    @Test
+    public void testProductionClassifier_GroupNamedMomOrDad_NeverUrgentFamily() {
+        String groupNamedMom1 = "WhatsApp. Mom. Ravi: did you buy it?";
+        String groupNamedMom2 = "WhatsApp. Mom. Priya: let's meet at 7";
+        String groupNamedDad = "WhatsApp. Dad. Uncle Bob: are you joining the call?";
+
+        // 1. Group chats where isDirectMessage is false MUST NOT trigger FAMILY urgency
+        IntentBrain.ClassificationResult resGroupMom = IntentBrain.evaluateHeuristicsDetailed(
+            groupNamedMom1, "Mom", false, null, null, null, null
+        );
+        assertNotEquals("Group chat named 'Mom' must never be Urgent (0)", 0, resGroupMom.category);
+        assertNotEquals("Group chat named 'Mom' must not have source 'FAMILY'", "FAMILY", resGroupMom.source);
+
+        // 2. Even in text-only fallback, the group sender prefix ("Ravi: ...") prevents false FAMILY urgency
+        IntentBrain.ClassificationResult resTextFallback = IntentBrain.evaluateHeuristicsDetailed(
+            groupNamedMom1, null, false, null, null, null, null
+        );
+        assertNotEquals("Text fallback with sender prefix must never be Urgent (0)", 0, resTextFallback.category);
+        assertNotEquals("Text fallback with sender prefix must not have source 'FAMILY'", "FAMILY", resTextFallback.source);
+
+        assertFalse("groupNamedMom1 text must not be recognized as family direct message",
+            IntentBrain.isFamilyDirectMessage(null, false, groupNamedMom1));
+        assertFalse("groupNamedMom2 text must not be recognized as family direct message",
+            IntentBrain.isFamilyDirectMessage(null, false, groupNamedMom2));
+        assertFalse("groupNamedDad text must not be recognized as family direct message",
+            IntentBrain.isFamilyDirectMessage(null, false, groupNamedDad));
+
+        // 3. Sender prefix detection helper
+        assertTrue(IntentBrain.isGroupMessageText("Ravi: did you buy it?"));
+        assertTrue(IntentBrain.isGroupMessageText("Priya: let's meet at 7"));
+        assertTrue(IntentBrain.isGroupMessageText("Uncle Bob: are you joining the call?"));
+        assertFalse("Direct text must not match group prefix", IntentBrain.isGroupMessageText("did you buy it?"));
+        assertFalse("URL must not match group prefix", IntentBrain.isGroupMessageText("https://example.com/test"));
+        assertFalse("Timestamp must not match group prefix", IntentBrain.isGroupMessageText("10:30 am meeting"));
+    }
+
+    // ── 13. REAL PRODUCTION TEST: Personal Messages from Friends ────────────
+    @Test
+    public void testProductionClassifier_PersonalMessages_NeverFalseUrgentAndNeverSpam() {
+        String friend1 = "WhatsApp. Ravi. lunch today?";
+        String friend2 = "WhatsApp. Priya. I'm free tomorrow, want to grab coffee?";
+        String friend3 = "WhatsApp. Amit. check out this photo from yesterday";
+        String friend4 = "WhatsApp. Friend. new restaurant opened near us, let's try it";
+        String friend5 = "Messages. Sarah. see you at the cafe";
+
+        // Under heuristic evaluation, none of these should falsely trigger Urgent (0)
+        assertNotEquals(0, IntentBrain.evaluateHeuristics(friend1, null, null, null, null));
+        assertNotEquals(0, IntentBrain.evaluateHeuristics(friend2, null, null, null, null));
+        assertNotEquals(0, IntentBrain.evaluateHeuristics(friend3, null, null, null, null));
+        assertNotEquals(0, IntentBrain.evaluateHeuristics(friend4, null, null, null, null));
+        assertNotEquals(0, IntentBrain.evaluateHeuristics(friend5, null, null, null, null));
+
+        // Under heuristic evaluation without user blocks, none should be classified as Spam (2)
+        assertNotEquals(2, IntentBrain.evaluateHeuristics(friend1, null, null, null, null));
+        assertNotEquals(2, IntentBrain.evaluateHeuristics(friend2, null, null, null, null));
+        assertNotEquals(2, IntentBrain.evaluateHeuristics(friend3, null, null, null, null));
+        assertNotEquals(2, IntentBrain.evaluateHeuristics(friend4, null, null, null, null));
+        assertNotEquals(2, IntentBrain.evaluateHeuristics(friend5, null, null, null, null));
+
+        // When detailed heuristics are evaluated:
+        // Ordinary chat messages should fall through to FALLBACK (-1)
+        IntentBrain.ClassificationResult res1 = IntentBrain.evaluateHeuristicsDetailed(friend1, "Ravi", true, null, null, null, null);
+        IntentBrain.ClassificationResult res2 = IntentBrain.evaluateHeuristicsDetailed(friend2, "Priya", true, null, null, null, null);
+        IntentBrain.ClassificationResult res3 = IntentBrain.evaluateHeuristicsDetailed(friend3, "Amit", true, null, null, null, null);
+
+        assertEquals(-1, res1.category);
+        assertEquals("FALLBACK", res1.source);
+        assertEquals(-1, res2.category);
+        assertEquals("FALLBACK", res2.source);
+        assertEquals(-1, res3.category);
+        assertEquals("FALLBACK", res3.source);
+
+        // However, if a friend sends a true emergency keyword, it DOES elevate to Urgent (0)
+        String friendEmergency = "WhatsApp. Ravi. Emergency! In the hospital, please call immediately";
+        IntentBrain.ClassificationResult resEmergency = IntentBrain.evaluateHeuristicsDetailed(friendEmergency, "Ravi", true, null, null, null, null);
+        assertEquals(0, resEmergency.category);
+        assertEquals("SYSTEM_URGENT", resEmergency.source);
+    }
 }

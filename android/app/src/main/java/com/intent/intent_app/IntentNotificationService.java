@@ -239,19 +239,38 @@ public class IntentNotificationService extends NotificationListenerService {
             String fullContext = readablePackage + ". " + title + ". " + text;
 
             // 1. Direct Peer-to-Peer Message vs Group Conversation Detection
+            // Multi-signal detection across standard extras, MessagingStyle, textLines, and message body.
+            // Reliably identifies groups even when messaging apps omit optional EXTRA_IS_GROUP_CONVERSATION.
             boolean isGroupConversation = extras.getBoolean(Notification.EXTRA_IS_GROUP_CONVERSATION, false) ||
-                                          extras.containsKey("android.conversationTitle") ||
-                                          (extras.containsKey(Notification.EXTRA_CONVERSATION_TITLE) &&
-                                           extras.getCharSequence(Notification.EXTRA_CONVERSATION_TITLE) != null);
+                                          extras.getBoolean("android.isGroupConversation", false) ||
+                                          (extras.getCharSequence(Notification.EXTRA_CONVERSATION_TITLE) != null &&
+                                           !extras.getCharSequence(Notification.EXTRA_CONVERSATION_TITLE).toString().trim().isEmpty()) ||
+                                          (extras.getCharSequence("android.conversationTitle") != null &&
+                                           !extras.getCharSequence("android.conversationTitle").toString().trim().isEmpty()) ||
+                                          isGroupMessageText(text) ||
+                                          hasGroupTextLines(extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)) ||
+                                          hasMultipleSendersInMessages(extras, title);
 
             boolean isMessaging = Notification.CATEGORY_MESSAGE.equals(notification.category) ||
                                   Notification.CATEGORY_CALL.equals(notification.category) ||
                                   extras.containsKey(Notification.EXTRA_MESSAGING_PERSON) ||
                                   extras.containsKey("android.people.list") ||
-                                  hasInlineReplyAction(notification);
+                                  hasInlineReplyAction(notification) ||
+                                  isMessagingPackage(packageName);
 
             // Direct 1-on-1 communication strictly excludes group chats (e.g. "Mom Friends", "Dad Jokes")
             boolean isDirect1to1Message = isMessaging && !isGroupConversation;
+
+            // Strict Family Urgency Contact Verification:
+            // A group or contact named exactly "Mom" or "Dad" must NOT trigger family urgency unless
+            // it is a confirmed 1-on-1 direct message AND (when contact permission is available)
+            // an actual saved contact in the user's phonebook.
+            if (isDirect1to1Message && IntentBrain.isFamilyRelation(title)) {
+                if (hasContactPermission() && !isSavedContact(title)) {
+                    Log.w(TAG, "Sender matches family keyword '" + title + "' but is NOT a saved contact in phonebook. Disallowing family urgency.");
+                    isDirect1to1Message = false;
+                }
+            }
 
             // 3. AI Pipeline
             long inferenceStartMs = System.currentTimeMillis();
@@ -794,6 +813,85 @@ public class IntentNotificationService extends NotificationListenerService {
             }
         }
         return false;
+    }
+
+    private static final java.util.regex.Pattern GROUP_SENDER_PREFIX_PATTERN = java.util.regex.Pattern.compile(
+        "^(?!https?:|ftp:|[0-9]{1,2}:[0-9]{2})([^:\\n]{1,35}):\\s+(.*)$",
+        java.util.regex.Pattern.DOTALL
+    );
+
+    public static boolean isGroupMessageText(String text) {
+        if (text == null || text.trim().isEmpty()) return false;
+        return GROUP_SENDER_PREFIX_PATTERN.matcher(text.trim()).matches();
+    }
+
+    public static boolean hasGroupTextLines(CharSequence[] lines) {
+        if (lines == null || lines.length == 0) return false;
+        for (CharSequence line : lines) {
+            if (line != null && isGroupMessageText(line.toString())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public static boolean hasMultipleSendersInMessages(android.os.Bundle extras, String title) {
+        if (extras == null) return false;
+        try {
+            java.util.List<?> messages = extras.getParcelableArrayList("android.messages");
+            if (messages == null) {
+                android.os.Parcelable[] array = extras.getParcelableArray(Notification.EXTRA_MESSAGES);
+                if (array != null) messages = java.util.Arrays.asList(array);
+            }
+            if (messages != null && !messages.isEmpty()) {
+                java.util.HashSet<String> senders = new java.util.HashSet<>();
+                for (Object item : messages) {
+                    if (item instanceof android.os.Bundle) {
+                        android.os.Bundle mb = (android.os.Bundle) item;
+                        CharSequence sender = mb.getCharSequence("sender");
+                        if (sender != null && !sender.toString().trim().isEmpty()) {
+                            String s = sender.toString().trim();
+                            senders.add(s.toLowerCase());
+                            if (title != null && !title.isEmpty() && !s.equalsIgnoreCase(title.trim())) {
+                                return true; // Sender differs from conversation title -> Group chat!
+                            }
+                        }
+                    }
+                }
+                if (senders.size() > 1) {
+                    return true; // Multiple distinct participants -> Group chat!
+                }
+            }
+        } catch (Exception ignored) {}
+        return false;
+    }
+
+    private static final java.util.Set<String> KNOWN_MESSAGING_PACKAGES = new java.util.HashSet<>(java.util.Arrays.asList(
+        "com.whatsapp",
+        "com.whatsapp.w4b",
+        "org.telegram.messenger",
+        "org.telegram.plus",
+        "org.thoughtcrime.securesms",
+        "com.google.android.apps.messaging",
+        "com.samsung.android.messaging",
+        "com.facebook.orca",
+        "com.facebook.mlite",
+        "com.discord",
+        "com.slack",
+        "com.skype.raider",
+        "com.viber.voip",
+        "jp.naver.line.android",
+        "com.sgiggle.production"
+    ));
+
+    private boolean isMessagingPackage(String pkg) {
+        if (pkg == null) return false;
+        return KNOWN_MESSAGING_PACKAGES.contains(pkg.toLowerCase().trim());
+    }
+
+    private boolean hasContactPermission() {
+        return androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.READ_CONTACTS)
+                == android.content.pm.PackageManager.PERMISSION_GRANTED;
     }
 
     private final java.util.Map<String, Boolean> contactCheckCache = new java.util.concurrent.ConcurrentHashMap<>();

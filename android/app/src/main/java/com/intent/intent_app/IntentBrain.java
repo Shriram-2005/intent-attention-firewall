@@ -451,6 +451,16 @@ public class IntentBrain {
         "(?i)^(?:mom|dad|mother|father|wife|husband|son|daughter|brother|sister)\\s*[:\\-]\\s*.*$"
     );
 
+    private static final java.util.regex.Pattern GROUP_SENDER_PREFIX_PATTERN = java.util.regex.Pattern.compile(
+        "^(?!https?:|ftp:|[0-9]{1,2}:[0-9]{2})([^:\\n]{1,35}):\\s+(.*)$",
+        java.util.regex.Pattern.DOTALL
+    );
+
+    public static boolean isGroupMessageText(String text) {
+        if (text == null || text.trim().isEmpty()) return false;
+        return GROUP_SENDER_PREFIX_PATTERN.matcher(text.trim()).matches();
+    }
+
     public static boolean isFamilyRelation(String name) {
         if (name == null || name.trim().isEmpty()) return false;
         String trimmed = name.trim().toLowerCase();
@@ -458,25 +468,43 @@ public class IntentBrain {
     }
 
     /**
-     * The family urgency rule applies strictly to the SENDER of a direct message.
-     * It NEVER matches promotional body copy or titles from shopping/fitness/other apps
-     * (e.g. "Flipkart. Sale. Mom. Shop today and save big" or "Cult. Cult. Son: this week's new arrivals").
+     * The family urgency rule applies strictly to the SENDER of a confirmed 1:1 direct message.
+     * It NEVER matches group chats (even if titled "Mom" or "Dad"), messages containing
+     * group sender prefixes ("Ravi: did you buy it?"), or promotional body copy.
      */
     public static boolean isFamilyDirectMessage(String sender, boolean isDirectMessage, String text) {
-        // 1. If explicit sender and isDirectMessage are provided from Android Notification extras:
-        if (isDirectMessage && isFamilyRelation(sender)) {
-            return true;
+        // 1. If explicit sender is provided (from IntentNotificationService with direct-message status):
+        if (sender != null) {
+            // Must be a confirmed 1-to-1 direct message (strictly excludes group chats)
+            if (!isDirectMessage) {
+                return false;
+            }
+            // Even if flagged as a direct message, if the message text has a group sender prefix ("Ravi: ..."),
+            // it is a group message where members speak, not a 1:1 message from Mom
+            if (isGroupMessageText(text)) {
+                return false;
+            }
+            return isFamilyRelation(sender);
         }
 
-        // 2. If parsing from text context (for unit tests or when fullContext is evaluated alone):
+        // 2. Fallback for text context alone (when fullContext is evaluated without separate sender, e.g. in tests):
         if (text != null && !text.isEmpty()) {
             String trimmed = text.trim();
             // Match production format from known messaging apps: "WhatsApp. Mom. did you eat?"
             if (DIRECT_MSG_APP_FAMILY_PATTERN.matcher(trimmed).matches()) {
+                // Verify the message portion does not contain a group sender prefix ("Ravi: did you buy it?")
+                String[] parts = trimmed.split("\\.\\s*", 3);
+                if (parts.length >= 3 && isGroupMessageText(parts[2])) {
+                    return false;
+                }
                 return true;
             }
             // Match raw direct message format: "Mom: did you eat?"
             if (RAW_FAMILY_SENDER_PATTERN.matcher(trimmed).matches()) {
+                String[] parts = trimmed.split("[:\\-]\\s*", 2);
+                if (parts.length >= 2 && isGroupMessageText(parts[1])) {
+                    return false;
+                }
                 return true;
             }
         }
